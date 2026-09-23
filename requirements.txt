@@ -1,1 +1,1 @@
-motor-apuntes @ git+https://github.com/fiuba-resumenes/motor@v0.6.0
+motor-apuntes @ git+https://github.com/fiuba-resumenes/motor@v0.7.0
