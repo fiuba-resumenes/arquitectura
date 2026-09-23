@@ -1,0 +1,32 @@
+{
+  "name": "Arquitectura de Software - Apunte",
+  "short_name": "Arquitectura de Software",
+  "description": "Apunte de Arquitectura de Software (TB034, FIUBA), un resumen por clase.",
+  "lang": "es",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f4f6",
+  "theme_color": "#a8336b",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

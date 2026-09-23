@@ -1,0 +1,203 @@
+<section class="unidad" id="intro" data-titulo="Introducción a la arquitectura">
+  <h2>1. Introducción: qué es la arquitectura de software</h2>
+  <p class="nota">Este capítulo sale de las diapositivas y de la lectura asignada, porque la primera clase no quedó grabada. Lo que se dijo alrededor de las diapositivas no está acá.</p>
+  <p class="intro">Antes de hablar de atributos de calidad, tácticas o estilos hace falta ponerse de acuerdo en qué es "la arquitectura" de un sistema. El capítulo contrasta varias definiciones clásicas, fija la que usa el curso (la del SEI), y de ahí saca los dos conceptos que se usan en toda la materia: estructura y vista. Cierra con un ejercicio sobre un sistema conocido y con la lectura de Fowler sobre el rol del arquitecto.</p>
+
+  <h3 id="intro-caso-de-estudio">El caso de estudio: inscripción a cursos</h3>
+  <p>El hilo de la clase es un sistema que cualquier alumno de la facultad usó:</p>
+  <ul>
+    <li>Los alumnos se anotan a los cursos del cuatrimestre desde un web browser, entrando al sitio web de inscripción.</li>
+    <li>Las páginas las sirven <b>3 web servers Apache</b>, cada uno en su propia máquina física, a los que se accede a través de un <b>load balancer</b> instalado en otra máquina.</li>
+    <li>Cada web server accede <b>directamente</b> a una base de datos <b>MySQL</b> para registrar inscripciones y responder consultas sobre ellas.</li>
+    <li>Hay además una <b>aplicación de línea de comandos</b>, usada por personal administrativo, que consume algunos de los servicios expuestos por los web servers.</li>
+  </ul>
+  <p>La pregunta disparadora: si alguien dibuja este sistema con cajitas (browser y consola arriba, el load balancer en el medio, los tres Apache y la base abajo), ¿ese dibujo es la arquitectura del sistema? ¿Y en qué se diferencia "arquitectura" de "diseño"?</p>
+  <div class="warn"><b>El dibujo no es la arquitectura.</b> Es una representación de <em>una</em> de las estructuras del sistema, vista desde un ángulo (qué corre y cómo se comunica). El mismo sistema tiene otras estructuras igual de arquitectónicas (cómo se divide el código, dónde se despliega cada cosa) que ese dibujo no muestra. La respuesta completa sale de las definiciones que siguen.</div>
+
+  <h3 id="intro-definiciones">Definiciones clásicas</h3>
+  <p>No hay una única definición aceptada. Conviene conocer varias porque cada una pone el foco en algo distinto.</p>
+
+  <h4 id="intro-fowler">Martin Fowler</h4>
+  <p>Fowler contrasta dos definiciones clásicas:</p>
+  <ol>
+    <li>La <b>descomposición de más alto nivel</b> de un sistema en sus partes fundamentales.</li>
+    <li>El <b>conjunto de decisiones de diseño que son difíciles de cambiar</b>.</li>
+  </ol>
+  <p>Y las resume en una frase: al fin de cuentas, la arquitectura se reduce a <b>lo importante, lo que sea que eso fuera</b>. Qué es "lo importante" depende del sistema y de quién lo construye.</p>
+
+  <h4 id="intro-iso">ISO/IEC/IEEE 42010</h4>
+  <div class="def"><b>Arquitectura (ISO/IEC/IEEE 42010).</b> Conceptos o propiedades fundamentales de un sistema en su entorno, comprendido por sus elementos, relaciones y principios de su diseño y evolución.</div>
+  <p>Es el estándar de 2011 (actualizado en 2013) que reemplaza las definiciones anteriores de IEEE e ISO. Dos detalles para notar: habla del sistema <b>en su entorno</b> (no aislado), e incluye los <b>principios</b> que guían cómo se diseña y cómo evoluciona, no solo las piezas.</p>
+
+  <h4 id="intro-fielding">Roy Fielding</h4>
+  <div class="def"><b>Arquitectura (Fielding, 2000).</b> Abstracción de los elementos de tiempo de ejecución (run-time elements) de un sistema de software durante alguna fase de su operación. Un sistema puede tener muchos niveles de abstracción y muchas fases de operación.</div>
+  <p>Sale de su tesis doctoral, <em>Architectural Styles and the Design of Network-based Software Architectures</em> (la de REST, bibliografía del curso). Distingue tres tipos de elementos: <b>componentes</b>, <b>conectores</b> y <b>datos</b>. El foco está puesto exclusivamente en lo que existe mientras el sistema corre.</p>
+
+  <h4 id="intro-uncle-bob">Robert Martin (Uncle Bob)</h4>
+  <div class="def"><b>Arquitectura (Martin, <em>Clean Architecture</em>, 2017).</b> La forma dada al sistema por quienes lo construyeron. Esa forma está determinada por la división en componentes, la disposición de los componentes y las maneras en que pueden comunicarse entre ellos.</div>
+  <p>Agrega dos cosas que las otras no dicen:</p>
+  <ul>
+    <li><b>Propósito:</b> esa forma existe para facilitar el desarrollo, el despliegue, la operación y el mantenimiento del sistema.</li>
+    <li><b>Estrategia:</b> dejar tantas opciones abiertas como sea posible, por el máximo tiempo posible.</li>
+  </ul>
+
+  <h4 id="intro-sei">Software Engineering Institute (la del curso)</h4>
+  <div class="def"><b>Arquitectura de software (SEI, Carnegie Mellon).</b> Conjunto de estructuras necesarias para razonar sobre el sistema, que constan de elementos de software, relaciones entre ellos y propiedades de ambos.</div>
+  <p>Es la definición de <em>Software Architecture in Practice</em> (3.ª edición, Bass, Clements y Kazman, 2013), el libro base de la materia. <b>Es la que elige el curso</b>, y todo lo que sigue (atributos de calidad, tácticas, vistas) se apoya en ella.</p>
+
+  <table>
+    <thead><tr><th>Fuente</th><th>Qué pone en el centro</th><th>Idea para recordar</th></tr></thead>
+    <tbody>
+      <tr><td>Fowler</td><td>Lo importante y difícil de cambiar</td><td>Descomposición de más alto nivel, o decisiones difíciles de cambiar</td></tr>
+      <tr><td>ISO/IEC/IEEE 42010</td><td>Propiedades fundamentales del sistema en su entorno</td><td>Elementos, relaciones y principios de diseño y evolución</td></tr>
+      <tr><td>Fielding</td><td>Elementos de run-time</td><td>Componentes, conectores y datos</td></tr>
+      <tr><td>Uncle Bob</td><td>La forma del sistema y su propósito</td><td>Dejar opciones abiertas el mayor tiempo posible</td></tr>
+      <tr><td>SEI (la del curso)</td><td>Estructuras para razonar</td><td>Elementos, relaciones y propiedades de ambos</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="intro-definicion-sei">Desarmando la definición del SEI</h3>
+  <p>La definición se entiende mejor leyendo cada término:</p>
+  <ul>
+    <li><b>Estructura:</b> conjunto de elementos unidos por una relación. Un sistema no tiene "una" estructura sino varias, cada una definida por un tipo de elemento y un tipo de relación.</li>
+    <li><b>Elementos:</b> pueden ser <b>módulos</b> (estáticos: unidades de código) o <b>componentes</b> (dinámicos: cosas que existen en ejecución, como procesos).</li>
+    <li><b>Propiedades de ambos:</b> no alcanza con listar piezas y flechas; importan las propiedades de los elementos y de las relaciones (qué protocolo usa una conexión, cuántas instancias hay de un proceso).</li>
+    <li><b>Necesarias para razonar:</b> no cualquier estructura es arquitectura. Lo es la que hace falta para razonar sobre el sistema, en particular sobre sus atributos de calidad.</li>
+  </ul>
+  <div class="ej"><b>Dos estructuras del mismo tipo de sistema.</b> Un diagrama con un proceso ejecutable que habla por HTTPS con un proceso distribuidor, que reparte a dos procesos servidores, que a su vez hablan por TCP con un motor de base de datos, representa un grupo de <b>procesos</b> relacionados: es una estructura de <b>componentes</b>. Una pila Presentation, Service, Domain Objects, Data Mapper, Data Access, unidas por dependencias, representa un grupo de <b>módulos</b> relacionados: es una estructura de <b>módulos</b>. Ninguna de las dos es "la" arquitectura: las dos son parte de ella.</div>
+
+  <h3 id="intro-tipos-estructuras">Tipos de estructuras</h3>
+  <p>Las estructuras se agrupan en tres familias, y cada una sirve para razonar sobre cosas distintas:</p>
+  <table>
+    <thead><tr><th>Tipo</th><th>Qué son sus elementos</th><th>Para razonar sobre</th><th>Ejemplo</th></tr></thead>
+    <tbody>
+      <tr><td><b>Module</b></td><td>Estáticos: unidades de implementación a las que se les asignan responsabilidades</td><td>Modificabilidad</td><td>Patrón Layers</td></tr>
+      <tr><td><b>C&amp;C</b> (Components and Connectors)</td><td>Dinámicos: elementos que existen en runtime y cómo interactúan</td><td>Performance, seguridad, disponibilidad, etc.</td><td>Client-Server</td></tr>
+      <tr><td><b>Allocation</b></td><td>Mapeo entre el software y su entorno</td><td>Dónde y por quién vive cada pieza</td><td>Equipos, deployment, repositorios de código</td></tr>
+    </tbody>
+  </table>
+  <div class="idea"><b>Cada pregunta tiene su estructura.</b> Si la pregunta es "¿cuánto cuesta cambiar esto?", se mira la estructura de módulos. Si es "¿aguanta la carga?" o "¿qué pasa si se cae un servidor?", se mira la de C&amp;C. Si es "¿en qué máquina corre?" o "¿qué equipo lo mantiene?", la de allocation.</div>
+  <div class="warn"><b>Módulo no es componente.</b> Un módulo es código (existe aunque el sistema esté apagado); un componente es algo que corre. Un mismo módulo puede ejecutarse como varios componentes (los tres Apache del caso corren el mismo código), y un componente puede ejecutar código de muchos módulos.</div>
+
+  <h3 id="intro-vistas">Estructuras y vistas</h3>
+  <div class="def"><b>Vista.</b> Representación de una estructura.</div>
+  <p>La estructura es la cosa (existe en el sistema, se la documente o no); la vista es el documento que la muestra. Por eso la frase del curso es: <b>"diseñamos estructuras, y documentamos vistas de esas estructuras"</b>.</p>
+  <p>Para un sistema cliente-servidor, por ejemplo, una vista de la estructura <em>Module Decomposition</em> muestra un sistema dividido en dos módulos, Client y Server. Una vista de la estructura <em>Components and Connectors</em> del mismo sistema muestra un servidor al que se conectan muchos clientes en ejecución, unidos por conectores request-reply. Mismo sistema, dos estructuras, dos vistas que no se parecen en nada.</p>
+  <div class="idea"><b>La arquitectura es una abstracción.</b> Ninguna vista la contiene entera: cada una elige qué elementos y qué relación mostrar y deja todo lo demás afuera. Eso responde la pregunta del caso de estudio: el dibujo de cajitas es una vista, de una estructura, de la arquitectura.</div>
+  <div class="warn"><b>Las vistas llevan leyenda.</b> Una flecha no significa lo mismo en todas las vistas: en la vista C&amp;C del ejercicio de abajo es "se comunica por HTTPS", en la de capas es "puede usar". Por eso cada vista indica qué es cada caja y cada línea.</div>
+
+  <h3 id="intro-ejercicio">Ejercicio: dos vistas del sistema de inscripción</h3>
+  <p>Sobre el caso de estudio se piden dos cosas:</p>
+  <ol>
+    <li>Dibujar una <b>vista C&amp;C</b> de la arquitectura, identificando componentes, conectores y datos involucrados.</li>
+    <li>Sabiendo que los arquitectos dividieron el sistema en tres capas lógicas, Presentación (UI), Lógica de Negocio (Business Logic) y Acceso a Datos (Data Access), generar una <b>vista de módulos</b>.</li>
+  </ol>
+
+  <h4 id="intro-vista-cc">Vista C&amp;C</h4>
+  <p>Los componentes son lo que corre: el web browser, la aplicación de consola, el load balancer HTTP, los tres web servers Apache y la base de datos relacional. Los conectores son dos: <b>HTTPS</b> entre los clientes y el load balancer y entre el load balancer y cada web server, y <b>acceso a datos por TCP</b> entre cada web server y la base. Los datos que viajan son los pedidos de los clientes (páginas, servicios que consume la consola) y las inscripciones que se registran y consultan en la base.</p>
+  <figure class="diag">
+    <svg viewBox="0 0 520 340" role="img" aria-label="Vista C&amp;C del sistema de inscripción: web browser y console app se conectan por HTTPS al load balancer, que reparte por HTTPS a tres web servers Apache; cada web server accede por TCP a la base de datos">
+      <rect x="60" y="14" width="140" height="40" rx="6" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="130" y="39" text-anchor="middle" fill="currentColor" font-size="13">Web Browser</text>
+      <rect x="320" y="14" width="140" height="40" rx="6" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="390" y="39" text-anchor="middle" fill="currentColor" font-size="13">Console App</text>
+
+      <rect x="190" y="100" width="140" height="40" rx="20" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="260" y="125" text-anchor="middle" fill="currentColor" font-size="13">Load Balancer</text>
+
+      <path d="M 130 54 L 230 100" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <path d="M 230 100 L 219 99 L 223 92 Z" fill="var(--linea)"/>
+      <path d="M 390 54 L 290 100" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <path d="M 290 100 L 297 92 L 301 99 Z" fill="var(--linea)"/>
+
+      <rect x="20" y="190" width="130" height="40" rx="6" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="85" y="215" text-anchor="middle" fill="currentColor" font-size="12">Apache Web Server</text>
+      <rect x="195" y="190" width="130" height="40" rx="6" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="260" y="215" text-anchor="middle" fill="currentColor" font-size="12">Apache Web Server</text>
+      <rect x="370" y="190" width="130" height="40" rx="6" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="435" y="215" text-anchor="middle" fill="currentColor" font-size="12">Apache Web Server</text>
+
+      <path d="M 230 140 L 85 190" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <path d="M 85 190 L 93 182 L 96 189 Z" fill="var(--linea)"/>
+      <path d="M 260 140 L 260 190" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <path d="M 260 190 L 256 181 L 264 181 Z" fill="var(--linea)"/>
+      <path d="M 290 140 L 435 190" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <path d="M 435 190 L 424 189 L 427 182 Z" fill="var(--linea)"/>
+
+      <rect x="195" y="280" width="130" height="40" rx="6" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="260" y="305" text-anchor="middle" fill="currentColor" font-size="13">Database</text>
+
+      <path d="M 85 230 L 85 300 L 195 300" fill="none" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <path d="M 260 230 L 260 280" fill="none" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <path d="M 435 230 L 435 300 L 325 300" fill="none" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+      <path d="M 390 262 L 420 262" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <text x="428" y="266" fill="currentColor" font-size="11">HTTPS</text>
+      <path d="M 390 282 L 420 282" fill="none" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="428" y="286" fill="currentColor" font-size="11">TCP (datos)</text>
+    </svg>
+    <figcaption>Vista de la estructura de componentes y conectores. Las cajas son procesos en ejecución; las líneas llenas, conectores HTTPS; las punteadas, acceso a datos por TCP.</figcaption>
+  </figure>
+  <p>Esta es la vista que sirve para razonar sobre atributos de runtime (performance, disponibilidad, seguridad): por ejemplo, que hay tres web servers detrás de un load balancer pero una única base compartida por los tres.</p>
+
+  <h4 id="intro-vista-capas">Vista de módulos: capas</h4>
+  <p>Con la información de las tres capas lógicas sale una vista de la estructura <em>Layers</em>. La capa UI tiene dos segmentos, <b>Web</b> y <b>Command Line</b>, que corresponden a las dos formas de usar el sistema. Debajo están Business Logic y Data Access. La relación entre capas es <b>"puede usar"</b>, y va hacia abajo.</p>
+  <figure class="diag">
+    <svg viewBox="0 0 460 250" role="img" aria-label="Vista de capas del sistema de inscripción: capa UI con los segmentos Web y Command Line, que puede usar la capa Business Logic, que puede usar la capa Data Access">
+      <rect x="20" y="14" width="280" height="64" rx="4" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="160" y="32" text-anchor="middle" fill="currentColor" font-size="13">UI</text>
+      <rect x="36" y="42" width="110" height="26" rx="8" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <text x="91" y="60" text-anchor="middle" fill="currentColor" font-size="12">Web</text>
+      <rect x="170" y="42" width="116" height="26" rx="8" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <text x="228" y="60" text-anchor="middle" fill="currentColor" font-size="12">Command Line</text>
+
+      <path d="M 160 78 L 160 110" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <path d="M 160 116 L 155 107 L 165 107 Z" fill="var(--linea)"/>
+      <rect x="20" y="116" width="280" height="44" rx="4" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="160" y="143" text-anchor="middle" fill="currentColor" font-size="13">Business Logic</text>
+
+      <path d="M 160 160 L 160 186" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <path d="M 160 192 L 155 183 L 165 183 Z" fill="var(--linea)"/>
+      <rect x="20" y="192" width="280" height="44" rx="4" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="160" y="219" text-anchor="middle" fill="currentColor" font-size="13">Data Access</text>
+
+      <text x="330" y="40" fill="var(--acc2)" font-size="12">Leyenda</text>
+      <rect x="330" y="52" width="36" height="18" rx="2" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="374" y="65" fill="currentColor" font-size="11">Layer</text>
+      <rect x="330" y="82" width="36" height="18" rx="6" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <text x="374" y="95" fill="currentColor" font-size="11">Layer segment</text>
+      <path d="M 330 121 L 360 121" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <path d="M 366 121 L 358 116 L 358 126 Z" fill="var(--linea)"/>
+      <text x="374" y="125" fill="currentColor" font-size="11">Puede usar</text>
+    </svg>
+    <figcaption>Vista de la estructura de módulos (Layers). Las cajas son unidades de código, no procesos: esta vista no dice nada de cuántas máquinas hay.</figcaption>
+  </figure>
+  <div class="warn"><b>Las dos vistas no se mapean una a una.</b> En la vista de capas no aparecen el load balancer, ni los tres servidores, ni la base como proceso; en la vista C&amp;C no aparecen las capas. Los tres Apache ejecutan el mismo código (las mismas capas), y la consola, que en C&amp;C es un cliente más del load balancer, en la vista de módulos es un segmento de la capa UI. Cada vista responde preguntas distintas, y ninguna sola es "la" arquitectura.</div>
+
+  <h3 id="intro-fowler-lectura">Lectura: "Who Needs an Architect?" (Fowler)</h3>
+  <p>Es la lectura asignada después de esta clase (IEEE Software, 2003). Discute qué es la arquitectura y, sobre todo, qué hace un arquitecto.</p>
+
+  <h4 id="intro-fowler-que-es">Arquitectura como entendimiento compartido</h4>
+  <p>Fowler cita a Ralph Johnson, que critica la definición de IEEE ("el concepto de más alto nivel de un sistema en su entorno"): no existe un concepto de más alto nivel, porque los clientes tienen uno distinto al de los desarrolladores y la estructura de componentes no les importa. Johnson propone:</p>
+  <ul>
+    <li>La arquitectura es el <b>entendimiento compartido</b> del diseño del sistema que tienen los desarrolladores expertos del proyecto: cómo se divide en componentes y cómo interactúan por interfaces. Un componente es significativo porque los expertos dicen que lo es.</li>
+    <li>Por eso la arquitectura es una <b>construcción social</b>: depende de qué parte del software el grupo considera importante.</li>
+    <li>La otra definición común, "las decisiones que hay que tomar temprano", la reformula: son las decisiones que <b>uno querría</b> acertar temprano, sin que sea más probable acertarlas que cualquier otra.</li>
+  </ul>
+  <div class="ej"><b>La persistencia, ¿es arquitectura?</b> En una aplicación enterprise, la base de datos y la capa de persistencia suelen estar en el centro del dibujo de arquitectura. En una aplicación de imágenes médicas la misma base Oracle puede no ser arquitectónica en absoluto: la complejidad está en analizar imágenes, no en guardarlas. De ahí la conclusión: la arquitectura es lo importante, lo que sea que eso fuera.</div>
+
+  <h4 id="intro-fowler-rol">El rol del arquitecto</h4>
+  <table>
+    <thead><tr><th><em>Architectus Reloadus</em></th><th><em>Architectus Oryzus</em></th></tr></thead>
+    <tbody>
+      <tr><td>Toma todas las decisiones importantes él solo, para asegurar la integridad conceptual, y porque desconfía de que el equipo pueda tomarlas.</td><td>Está muy atento a lo que pasa en el proyecto, detecta los problemas importantes y los ataca antes de que sean graves.</td></tr>
+      <tr><td>Decide temprano para que el resto tenga un plan que seguir.</td><td>Colabora intensamente: programa con desarrolladores, participa de sesiones de requerimientos explicando en términos no técnicos las consecuencias (por ejemplo, de costo) de cada idea.</td></tr>
+      <tr><td>Riesgo: se vuelve un cuello de botella arquitectónico.</td><td>Su actividad principal es hacer mentoring y subir el nivel del equipo para que pueda encarar problemas más complejos.</td></tr>
+    </tbody>
+  </table>
+  <div class="idea"><b>Regla práctica de Fowler.</b> El valor de un arquitecto es inversamente proporcional a la cantidad de decisiones que toma. El nombre que prefiere para el rol es <em>guía</em>, como en montañismo: el más experimentado, que enseña a los demás a arreglárselas solos pero está para lo realmente difícil.</div>
+
+  <h4 id="intro-fowler-irreversibilidad">Eliminar arquitectura</h4>
+  <p>Si la arquitectura son las cosas que se perciben como difíciles de cambiar, una de las tareas más importantes del arquitecto es <b>sacar arquitectura</b>: encontrar formas de eliminar la irreversibilidad del diseño. El ejemplo es el esquema de la base de datos, que "hay que acertar al principio"; en un proyecto de Fowler armaron un mecanismo para cambiarlo y migrar los datos fácilmente, y con eso el esquema dejó de ser arquitectónico.</p>
+  <div class="warn"><b>No todo puede ser fácil de cambiar.</b> Johnson aclara que no hay ninguna razón teórica para que algo del software sea difícil de cambiar, y cualquier aspecto aislado se puede volver flexible. Pero hacer algo fácil de cambiar agrega complejidad, y hacer <em>todo</em> fácil de cambiar vuelve al sistema muy complejo. Y la complejidad (junto con la duplicación) es lo que hace al software difícil de cambiar. La flexibilidad hay que ponerla donde importa.</div>
+</section>

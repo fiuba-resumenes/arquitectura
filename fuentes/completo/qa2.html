@@ -1,0 +1,291 @@
+<section class="unidad" id="qa2" data-titulo="Atributos de calidad II">
+  <h2>5. Atributos de calidad II y tácticas de escalabilidad</h2>
+  <p class="intro">Esta clase cierra el catálogo de atributos de calidad: visibilidad, testeabilidad, portabilidad, interoperabilidad, usabilidad, manejabilidad, fiabilidad, seguridad, simplicidad y modificabilidad con sus subatributos. La cátedra insiste en que no importa recitar la lista: importa, frente a un problema, detectar qué atributo hay que atacar y con qué otro hace trade-off. La segunda mitad baja todo a tierra con las tácticas de modificabilidad y un ejercicio de escalabilidad que arranca con un carrito de compras en RAM y termina en réplicas, sharding y colas de mensajes.</p>
+
+  <h3 id="qa2-visibilidad">Visibilidad</h3>
+  <div class="def"><b>Visibilidad.</b> Habilidad de un componente de monitorear o mediar la interacción entre otros dos componentes.</div>
+  <p>Hay dos bolitas que se hablan (cliente y servidor, dos pares, dos microservicios, lo que sea). La visibilidad del sistema es la capacidad de poner entre medio de esas dos una tercera bolita que logre <b>monitorear o mediar</b> lo que pasa entre ellas.</p>
+
+  <figure class="diag">
+    <svg viewBox="0 0 520 170" role="img" aria-label="Dos componentes A y B que se comunican, y un tercer componente intercalado entre ellos que puede monitorear (observar, loguear, alertar) o mediar (filtrar, cortar, modificar, cachear)">
+      <defs>
+        <marker id="qa2ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--linea)"/>
+        </marker>
+      </defs>
+      <circle cx="60" cy="70" r="34" fill="none" stroke="var(--linea)" stroke-width="2"/>
+      <text x="60" y="75" text-anchor="middle" fill="currentColor" font-size="14">A</text>
+      <circle cx="460" cy="70" r="34" fill="none" stroke="var(--linea)" stroke-width="2"/>
+      <text x="460" y="75" text-anchor="middle" fill="currentColor" font-size="14">B</text>
+      <rect x="200" y="40" width="120" height="60" rx="10" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="260" y="66" text-anchor="middle" fill="currentColor" font-size="13">tercero</text>
+      <text x="260" y="84" text-anchor="middle" fill="currentColor" font-size="11">intercalado</text>
+      <line x1="96" y1="70" x2="196" y2="70" stroke="var(--linea)" stroke-width="2" marker-end="url(#qa2ar)"/>
+      <line x1="324" y1="70" x2="424" y2="70" stroke="var(--linea)" stroke-width="2" marker-end="url(#qa2ar)"/>
+      <text x="170" y="130" text-anchor="middle" fill="var(--acc2)" font-size="12">monitorear:</text>
+      <text x="170" y="147" text-anchor="middle" fill="var(--acc2)" font-size="11">observar, loguear, alertar</text>
+      <text x="350" y="130" text-anchor="middle" fill="var(--acc2)" font-size="12">mediar:</text>
+      <text x="350" y="147" text-anchor="middle" fill="var(--acc2)" font-size="11">cortar, modificar, cachear</text>
+      <text x="260" y="22" text-anchor="middle" fill="currentColor" opacity="0.7" font-size="11">ni A ni B se enteran de que está ahí</text>
+    </svg>
+    <figcaption>La visibilidad es del sistema: qué tan fácil es intercalar un tercero entre dos componentes para que observe o intervenga.</figcaption>
+  </figure>
+
+  <p>Dos precisiones que el docente remarca:</p>
+  <ul>
+    <li><b>Es un atributo del sistema, no de la bolita.</b> Decir que la visibilidad es "la capacidad de un componente de ser observado" está mal. Lo que pasa adentro de la bolita, o que tenga un log, no importa.</li>
+    <li><b>Monitorear no es lo único.</b> Mediar es intervenir: un firewall que corta la comunicación sin que el destino se entere, un componente que actúa como decorator y cambia el mensaje ("hola" sale como "chau"), uno que deja pasar todo y solo loguea, uno que dispara alertas.</li>
+  </ul>
+  <div class="examen"><b>Dicho en clase: esta es "la" pregunta.</b> El docente avisó que la toma en el final porque casi siempre se contesta mal: al ver la palabra se chamulla por el lado de observabilidad y logs. Y que cada cuatrimestre se acuerdan del monitoreo pero se olvidan de la <b>mediación</b>. Definición completa: habilidad de un componente de monitorear <i>o mediar</i> la interacción entre otros dos.</div>
+
+  <div class="ej"><b>El cache como mediador.</b> Cliente en Buenos Aires, base de datos en Japón, latencia enorme. Se intercala un cache entre los dos: el cliente sigue creyendo que habla con la base, la base sigue recibiendo pedidos. Se pudo poner ahí porque había visibilidad: los pedidos eran SQL, un protocolo estándar, viajaban sin comprimir ni encriptar, y cualquiera podía entender qué se decían.</div>
+  <p>La slide agrupa los usos típicos: firewalls (filtrado, para seguridad), cache compartido de interacciones (performance) y métricas o detección de fallas (monitoreo).</p>
+
+  <h4 id="qa2-visibilidad-grados">No hay visibilidad absoluta</h4>
+  <p>No existe una "visibilidad patrón": algo es más o menos visible que otra alternativa. Un protocolo custom que nadie conoce no es invisible, pero es menos visible que uno estándar (para SQL ya hay mil herramientas armadas; para el custom hay que aprenderlo primero). Si para intercalar un mediador en una comunicación encriptada hay que compartirle claves, el sistema es menos visible que con todo en texto plano, y probablemente menos seguro.</p>
+  <div class="warn"><b>Trade-off clásico con seguridad.</b> Encriptar la comunicación para que un tercero no pueda leerla ni modificarla baja la visibilidad y sube la seguridad. El tercero todavía puede cortar la comunicación, pero ya no puede monitorear ni cambiar lo que viaja.</div>
+  <p>Agregar N mediadores en cadena no cambia la visibilidad (la capacidad de intercalar es la misma), pero no es gratis: cada salto adicional castiga la performance.</p>
+
+  <h3 id="qa2-testeabilidad">Testeabilidad</h3>
+  <div class="def"><b>Testeabilidad.</b> Grado en que un componente o sistema permite ser probado para exhibir sus fallas. Se relaciona con el esfuerzo necesario para llevar adelante las tareas de testing.</div>
+  <p>La pregunta es qué tan difícil es probar el sistema y buscarle las fallas. Ayudan los componentes aislados y desacoplados (que permiten mockear a los vecinos), una suite completa y automatizada, record/playback, TDD y monitores incorporados. Un monolito es menos testeable porque no se pueden mockear las otras bolitas, aunque seguramente gane en performance. El protocolo de la flecha también juega: probar algo con <code>curl</code> es más fácil que con una herramienta custom.</p>
+
+  <h3 id="qa2-portabilidad">Portabilidad</h3>
+  <div class="def"><b>Portabilidad.</b> Capacidad de un software de ser utilizado en distintos ambientes: arquitecturas de hardware, sistemas operativos, plataformas cloud.</div>
+  <p>Herramientas: lenguajes multiplataforma o interpretados (Java, Python frente a C++ o assembler, a costa de performance), virtualización, separar la lógica de las interfaces y, sobre todo, una <b>capa de abstracción</b> entre el sistema y la plataforma física. Es lo típico en embebidos, donde el hardware cambia seguido: se abstraen los periféricos y en esa capa se escribe la conexión con el hardware concreto. Hoy no corre en otro hardware, pero está preparado para irse.</p>
+  <div class="warn"><b>Tampoco hay portabilidad absoluta.</b> Que algo corra en el 100% de los ambientes es inviable y nadie lo pagaría. Tiene sentido invertir si se prevé una migración. Y la capa extra tiene costo: un salto más (performance), puede molestar a la escalabilidad y es otro punto de falla (disponibilidad).</div>
+
+  <h3 id="qa2-interoperabilidad">Interoperabilidad</h3>
+  <div class="def"><b>Interoperabilidad.</b> Habilidad de un sistema de operar satisfactoriamente en conjunto con otros sistemas, comunicándose e intercambiando información. Aparece con sistemas distribuidos, legacy y de terceras partes.</div>
+  <div class="ej"><b>La fábrica y el sistema nuevo.</b> Una fábrica usa hace diez años un software de producción hecho a medida, caro, que los empleados saben usar. Ahora compra un sistema de gestión (ventas, contabilidad, RRHH) y la condición es que se hable con el viejo, cuyo autor ya no está. La pregunta es qué tan interoperable es cada uno: si hay APIs; si no, si se puede entrar por la base de datos (el viejo usa SQL Server); si solo se pueden leer datos o también inyectarlos. Si los dos son muy interoperables, listo. Si no, hay que hacer malabares, por ejemplo una bolita intermedia que traduzca: el viejo guarda "dirección" en un campo y el nuevo usa cuatro (calle, número, localidad, código postal).</div>
+  <p>Ojo: una base abierta para que cualquiera la toquetee es cómoda para integrar y también para hackear. Y si ninguno de los dos está preparado para hablar con el otro pero la comunicación es visible, se puede intercalar un componente en el medio: visibilidad e interoperabilidad se ayudan.</p>
+  <div class="warn"><b>Qué es y qué no es interoperabilidad.</b> Si una dependencia interna (un servidor de aplicaciones que solo soporta TLS 1.2) queda deprecada, eso es un problema de dependencia, no de interoperabilidad. Sí lo es cuando un tercero con el que te comunicás deja de aceptar TLS 1.2 y tu core no puede subir: ahí estás negociando interoperabilidad, muchas veces a través de estándares que la industria acuerda para que todos hablen entre sí.</div>
+
+  <h3 id="qa2-usabilidad">Usabilidad</h3>
+  <div class="def"><b>Usabilidad.</b> Qué tan bien el sistema cumple con los requerimientos del usuario: intuitivo, localizable o personalizable, disponible para personas con limitaciones físicas y con una experiencia de uso satisfactoria.</div>
+  <p>Queja del docente: mucha gente de IT sale sabiendo programar pero no considera al usuario. Mensajes de error que hablan de "objeto no encontrado", botones lejos del dedo, textos ilegibles. Y la inconsistencia: relevó entre 30 y 40 pantallas distintas para ingresar un monto de dinero dentro de la misma empresa (unas pedían la coma, otras dos dígitos más). No puede haber tres maneras de hacer lo mismo en tres lugares. Pequeñeces así cambian productos.</p>
+
+  <h4 id="qa2-ab-testing">A/B testing</h4>
+  <p>Se expone una variante a una porción chica de la población (1 o 2%) y el resto sigue como siempre; se miden métricas de negocio en los dos grupos. Con volúmenes grandes (decenas de millones de pagos por día), mover una décima de punto es mucho dinero, y un cambio puede mejorar o empeorar con igual probabilidad. Si sale mal, rollback y el daño quedó en el 1%. Si sale bien, se sube de a poco (2%, 10%, 15%) hasta el 100%.</p>
+  <ul>
+    <li><b>Población homogénea:</b> la muestra tiene que ser representativa del resto, sin sesgo. Elegir a mano un grupo parecido entre sí sesga el resultado. Una forma buena: todos los usuarios cuyo identificador termina en 8 (10% sin edad, género ni carrera como criterio).</li>
+    <li><b>Coercitivo, no opt-in:</b> si el usuario elige participar, la muestra ya está sesgada.</li>
+    <li><b>Métrica típica:</b> conversión, la proporción de los que entran a un flujo que salen con éxito.</li>
+  </ul>
+
+  <h4 id="qa2-focus-groups">Focus groups y feedback cualitativo</h4>
+  <p>Con prototipos (no código final), se invita a un grupo chico de usuarios, a veces elegidos por edad, sexo o clase social para tener feedbacks distintos, a una cámara Gesell: se les pide una tarea ("comprá dólares") y especialistas miran detrás del vidrio si lo logran, qué cara ponen, si achican los ojos para leer. Es cualitativo, a diferencia del A/B testing que es cuantitativo.</p>
+  <div class="ej"><b>Cuando la estadística no alcanza.</b> Un checkout nuevo convertía 0,5 puntos menos que el viejo y el análisis cuantitativo no encontraba por qué. Se llamó por teléfono a usuarios que habían abandonado. Algunos creían que el botón "pagar con seguridad" (con un candadito) les estaba vendiendo un seguro. Eso no sale por números.</div>
+
+  <h4 id="qa2-rollout">Friends and family y rollout gradual</h4>
+  <p>Antes de salir al 1% de producción se abre a grupos que duele poco romper y que dan feedback: primero el equipo que lo codeó (que lo mira críticamente), después toda la empresa (más dispositivos, Android e iOS, fuentes grandes, zoom, teclados custom, más casos raros), después producción de a poco. También hay clientes representativos con los que producto trabaja cerca y se les habilita la feature con un feature flag. El objetivo: no romperla fuerte, o aprender rápido del usuario.</p>
+  <table>
+    <thead><tr><th>Técnica</th><th>Tipo</th><th>Sobre qué</th></tr></thead>
+    <tbody>
+      <tr><td>A/B testing</td><td>Cuantitativo, masa crítica</td><td>Producción, muestra homogénea y forzada</td></tr>
+      <tr><td>Focus group</td><td>Cualitativo, pocos usuarios</td><td>Prototipos, observación directa</td></tr>
+      <tr><td>Friends and family</td><td>Feedback informal</td><td>Grupos cercanos antes de abrir</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="qa2-manejabilidad">Manejabilidad</h3>
+  <div class="def"><b>Manejabilidad.</b> Facilidad de gestión del sistema por parte de sus administradores: administración general, monitoreo, debugging, performance tuning.</div>
+  <p>Juega el rol del administrador: instalar, configurar, monitorear, tunear. Dos extremos: un ejecutable con un archivo de configuración de texto (o un formulario la primera vez que corre), frente a bajarse un repo, instalar dependencias, tocar código fuente y compilar. Uno es más manejable que el otro. Performance tuning es típico de sistemas de gestión: poder poner índices o ajustar cosas a la problemática propia; si el sistema es muy cerrado no se puede tocar nada.</p>
+  <p class="nota">Según los supuestos cambia la discusión: con el código fuente a mano se puede tunear más fino. Y si usabilidad y manejabilidad se mezclan (el usuario que administra su propio espacio tiene "dos gorritos"), no hace falta trazar una raya: es un problema a resolver y tradeoffear.</p>
+
+  <h3 id="qa2-fiabilidad">Fiabilidad (confiabilidad)</h3>
+  <div class="def"><b>Fiabilidad.</b> Grado en que la arquitectura es susceptible a fallas a nivel sistema cuando se producen fallas parciales en componentes, conectores o datos.</div>
+  <p>Es "al revés" que disponibilidad. La disponibilidad se mira de afuera, como caja negra: el usuario (o la bolita que invoca) ve si anda o no, y si los problemas se enmascaran no hay problema. La fiabilidad se mira por adentro: qué tan delicado es el sistema, qué tan fácil es que un soplido lo tire. Un sistema con muchos puntos únicos de falla y sin redundancia es poco fiable, y eso seguramente redunde en disponibilidad baja.</p>
+  <div class="idea"><b>El médico.</b> Mirar a un paciente y decir si hoy está enfermo es disponibilidad. Saber que es diabético y fuma, y que aunque hoy esté bien es probable que se enferme, es fiabilidad.</div>
+  <table>
+    <thead><tr><th></th><th>Disponibilidad</th><th>Fiabilidad</th></tr></thead>
+    <tbody>
+      <tr><td>Punto de vista</td><td>Desde afuera (usuario, caja negra)</td><td>Desde adentro (arquitecto)</td></tr>
+      <tr><td>Pregunta</td><td>Anda o no anda, correctamente y a tiempo</td><td>Por qué es tan frágil</td></tr>
+      <tr><td>Se ve</td><td>Caídas percibidas</td><td>SPOFs, falta de redundancia</td></tr>
+    </tbody>
+  </table>
+  <p>Robusto, confiable y fiable se usan como sinónimos. Las tácticas (evitar SPOFs, redundancia, monitoreo, acciones correctivas) son las mismas que se vieron para disponibilidad.</p>
+
+  <h3 id="qa2-seguridad">Seguridad</h3>
+  <div class="def"><b>Seguridad.</b> Capacidad del sistema de prevenir acciones maliciosas o accidentales fuera del uso esperado.</div>
+  <p>No siempre hay malicia: también es que no pase lo que no debe pasar. Subatributos, con el ejemplo de una persona que le transfiere 100 dólares a otra:</p>
+  <table>
+    <thead><tr><th>Subatributo</th><th>Qué garantiza</th><th>En el ejemplo</th></tr></thead>
+    <tbody>
+      <tr><td>Confidencialidad</td><td>Datos y servicios protegidos de accesos no autorizados (negar, encriptar)</td><td>Nadie ajeno ve la transferencia</td></tr>
+      <tr><td>Integridad</td><td>Datos no manipulables sin autorización</td><td>El receptor no le agrega un cero</td></tr>
+      <tr><td>Disponibilidad</td><td>Sistema disponible para uso legítimo</td><td>No lo tiran con tráfico o un exploit</td></tr>
+      <tr><td>Autenticación</td><td>Las partes son quienes dicen ser</td><td>Un tercero no puede hacerse pasar por el emisor</td></tr>
+      <tr><td>Autorización</td><td>Cada parte tiene los permisos que corresponden</td><td>El emisor puede enviar dinero</td></tr>
+      <tr><td>No repudio</td><td>Nadie puede desconocer una transacción hecha</td><td>El emisor no puede decir "yo no fui"</td></tr>
+    </tbody>
+  </table>
+  <p>El no repudio en papel es la firma de un cheque verificada por un perito caligráfico o un escribano; en software se resuelve con firmas digitales y criptografía.</p>
+
+  <h3 id="qa2-simplicidad">Simplicidad</h3>
+  <div class="def"><b>Simplicidad.</b> Facilidad con la que la arquitectura de un sistema puede ser entendida, razonada y explicada.</div>
+  <p>La sobreingeniería no suma: si cuesta más explicarlo, seguramente cueste más mantenerlo. Con menos componentes todo se testea, codea y garantiza más fácil, y se ven mejor las redundancias. Principios: separation of concerns, KISS, YAGNI, no over-engineering ("¿necesitás este nivel de robustez o performance?") y last responsible moment (demorar decisiones hasta tener hechos que las justifiquen).</p>
+  <div class="warn"><b>El monolito engaña.</b> A nivel arquitectura es facilísimo de dibujar ("un monolito y un cliente"), pero pecás por otro lado: explicar qué hace adentro y cómo se testea.</div>
+
+  <h3 id="qa2-modificabilidad">Modificabilidad</h3>
+  <div class="def"><b>Modificabilidad.</b> Costo de realizar cambios a la arquitectura del sistema. Costo es tiempo o dinero (y también gente, o tokens).</div>
+  <p>Los cambios llegan siempre: funcionalidad nueva, bugs, seguridad, performance, UX, tecnologías, integraciones. Cuando el sistema nace, cambiar algo es barato; a medida que se acumulan cambios se complejiza y cada cambio pequeño cuesta más. Cuanto más modificable, menos cuesta mantenerlo.</p>
+
+  <figure class="diag">
+    <svg viewBox="0 0 440 190" role="img" aria-label="Curva de costo de mantenimiento en funcion del tiempo: arranca baja y plana y crece a medida que se acumulan cambios">
+      <line x1="50" y1="160" x2="420" y2="160" stroke="var(--linea)" stroke-width="2"/>
+      <line x1="50" y1="160" x2="50" y2="20" stroke="var(--linea)" stroke-width="2"/>
+      <path d="M 50 150 C 150 148, 220 130, 290 80 S 380 34, 410 30" fill="none" stroke="var(--acc)" stroke-width="2.5"/>
+      <text x="235" y="182" text-anchor="middle" fill="currentColor" font-size="12">tiempo (cambios acumulados)</text>
+      <text x="20" y="95" text-anchor="middle" fill="currentColor" font-size="12" transform="rotate(-90 20 95)">costo por cambio</text>
+      <text x="95" y="138" fill="var(--acc2)" font-size="11">al nacer: barato</text>
+      <text x="300" y="60" fill="var(--acc2)" font-size="11">complejizado: caro</text>
+    </svg>
+    <figcaption>El costo de mantenimiento crece con el tiempo. Mejorar la modificabilidad es aplanar esa curva.</figcaption>
+  </figure>
+
+  <p>Los subatributos pueden verse como atributos en sí mismos, pero son todos "hijos" de modificabilidad.</p>
+
+  <h4 id="qa2-evolucionabilidad">Evolucionabilidad</h4>
+  <p>Habilidad de modificar un componente sin impactar negativamente en otros; depende de qué tan bien se aplicó la abstracción que impone la arquitectura.</p>
+  <div class="ej"><b>Cambiar el algoritmo de compresión.</b> Una bolita comprime datos con el algoritmo X. Si solo el usuario final los descomprime, cambiarla es fácil. Si en el camino otras bolitas abren esos datos asumiendo el formato X, o si el nuevo algoritmo comprime peor y el archivo supera lo que otra aplicación acepta, hay que tocarlas todas: no es evolucionable por sí misma.</div>
+
+  <h4 id="qa2-extensibilidad">Extensibilidad</h4>
+  <p>Posibilidad de agregar funcionalidad nueva de forma simple (evolucionar es cambiar lo que hay; extender es agregar lo que no está). Reducir el acoplamiento suele ayudar, por ejemplo con un sistema basado en eventos.</p>
+  <div class="ej"><b>Pipeline de filtros de imagen.</b> Entra una foto, pasa por diez bolitas de filtro y sale. Agregar el filtro once es fácil si son bolitas separadas: se conecta en el medio. Es todavía más extensible si todas tienen input y output estandarizados, porque además se pueden reordenar (es el estilo pipes and filters). El trade-off: una interfaz estándar puede ser ineficiente para filtros que no usan todos los parámetros (mandar campos vacíos o poner conversores).</div>
+
+  <h4 id="qa2-personalizabilidad">Personalizabilidad</h4>
+  <p>Un componente es personalizable si puede ser extendido por un cliente sin impactar en otros clientes del mismo. No se trata del usuario eligiendo modo oscuro: se trata de un cliente que hace que su servidor haga lo que él quiere.</p>
+  <div class="ej"><b>La base de datos.</b> Es hiperpersonalizable: cada cliente manda el SQL que quiere y eso no afecta a los demás. No hay un endpoint rígido. Caso extremo: un servidor que recibe código del cliente y lo ejecuta. La clave es que cada cliente trabaje aislado para no colisionar con otros.</div>
+  <p>Trade-off: esa flexibilidad casi absoluta juega en contra de la seguridad (se puede romper todo) y de la disponibilidad (por robustez).</p>
+
+  <h4 id="qa2-configurabilidad">Configurabilidad</h4>
+  <p>Facilidad de cambiar componentes ya desplegados (post-deployment) para que realicen otro tipo de servicios, sin redeployarlos.</p>
+  <ul>
+    <li><b>Feature flags:</b> las apps bancarias suelen poder apagar desde el back una funcionalidad entera (préstamos, si aparece un bug grave) sin indisponibilizar todo. Es configurabilidad, pero a medias: solo se puede prender o apagar lo que ya está codeado en el front detrás de un <code>if</code>. Un banner nuevo con otro diseño no se puede.</li>
+    <li><b>La web:</b> el browser es una bolita y el servidor de un diario es otra. El servidor pone un banner hoy y lo saca mañana, y nadie redeploya el browser. Configurabilidad alta.</li>
+    <li><b>Nativo vs WebView en mobile:</b> en nativo cada cambio tarda dos o tres semanas en llegar (revisión de la store, rollout gradual, usuarios que no actualizan, varias versiones conviviendo en producción). Una WebView (una web dentro de la app) se actualiza con un deploy y cambia en todos los dispositivos, pero es más lenta y la experiencia es peor. Hay intermedios que bajan componentes mobile dinámicamente, y también server side rendering.</li>
+  </ul>
+  <div class="ej"><b>Descargar a demanda o no.</b> Dar de alta una tarjeta leyéndola por NFC requiere un componente pesado. Bajarlo al momento de usarlo es una experiencia pésima (esperar megas por 4G); incluirlo siempre infla la app para todos, incluso teléfonos sin NFC, y una app pesada se desinstala. Es una decisión llena de trade-offs, sin respuesta obvia.</div>
+
+  <h4 id="qa2-reusabilidad">Reusabilidad</h4>
+  <p>Habilidad de usar componentes en otras aplicaciones sin modificarlos; requiere bajo acoplamiento y generalidad en las interfaces. Los filtros de imagen bien abstraídos sirven en otras apps de diseño. El browser se reutiliza en cualquier aplicación web. Un monolito es una sola bolita: solo sirve para esa app. Con muchas bolitas, quizás parte de ellas sean reutilizables.</p>
+
+  <h3 id="qa2-extensible-respecto-de-que">Extensible respecto de qué</h3>
+  <p>Cómo saber si una arquitectura es fácil de extender. Dos ejes:</p>
+  <ul>
+    <li><b>Extensible en algo, no en todo.</b> Hacer un sistema extensible ante cualquier cambio es muy difícil, si no imposible. Se elige qué aspecto, módulo o grupo de funcionalidades hacer extensible, porque hay requerimientos o sospechas de que el cambio va a venir por ahí. En un sistema de inscripción se puede hacer extensible la inscripción de alumnos y dejar más rígida la administración interna; hacer todo extensible cuesta más y puede no pagar.</li>
+    <li><b>Hace falta un parámetro de comparación.</b> Decir que algo es extensible exige contra qué compararlo: un número ("agregar una funcionalidad a inscripciones no debe tomar más de una semana"), autoimpuesto o impuesto por el cliente; la competencia ("ellos sacan funciones cada tres meses, nosotros cada dos"); o una versión anterior ("en la 2.0, agregar algo acá tiene que ser X veces más barato").</li>
+  </ul>
+  <div class="idea">Lo mismo vale para cualquier atributo: "más" o "menos" siempre es respecto de algo. Sin métrica o referencia, la afirmación está vacía.</div>
+
+  <h3 id="qa2-tacticas-modificabilidad">Tácticas de modificabilidad</h3>
+  <p>Módulo: unidad lógica estática a la que se le asignan responsabilidades. Tres parámetros afectan la modificabilidad:</p>
+  <ul>
+    <li><b>Cohesión:</b> relación entre las responsabilidades de un módulo.</li>
+    <li><b>Acoplamiento:</b> probabilidad de que una modificación en un módulo se propague a otro.</li>
+    <li><b>Binding time:</b> momento en que se resuelven las dependencias: compilación o build, deployment o inicialización, runtime.</li>
+  </ul>
+  <table>
+    <thead><tr><th>Objetivo</th><th>Tácticas</th></tr></thead>
+    <tbody>
+      <tr><td>Aumentar cohesión</td><td>Split module; redistribuir responsabilidades analizando propósitos e hipotetizando cambios probables. Si dos cosas cambian juntas, van juntas: separadas obligan a tocar N módulos en vez de uno.</td></tr>
+      <tr><td>Reducir acoplamiento</td><td>Encapsular detrás de una API; intermediarios (pub-sub, repositorio compartido, dynamic service lookup); restringir dependencias (capas, wrappers); abstraer servicios comunes.</td></tr>
+      <tr><td>Diferir el binding</td><td>Parámetros de compilación, aspectos; archivos de configuración; discovery, repositorio compartido, polimorfismo. Inyección de dependencias e inversión de control.</td></tr>
+    </tbody>
+  </table>
+  <div class="ej"><b>Binding en runtime.</b> Por configuración, sin reiniciar ni redesplegar, el sistema pasa a consultar otro servicio externo para la cotización del dólar, o cambia la implementación del motor de recomendaciones. El costo de ese cambio es bajo frente a frenar, recompilar y redesplegar todo.</div>
+  <p>Otro ejemplo que surgió: las migrations de base de datos (agregar un campo sin bajar toda la base y afectar a todos los usuarios), ya sea que la tecnología lo soporte o se diseñe por encima, son una táctica que aumenta la modificabilidad.</p>
+  <p class="nota">El deck de tácticas trae además listas para seguridad, testeabilidad, usabilidad e interoperabilidad. La cátedra lo presenta como material de referencia, no para desarrollarlo táctica por táctica.</p>
+
+  <h3 id="qa2-ej15">Ejercicio 15: el carrito de compras en RAM</h3>
+  <p><b>Planteo.</b> Un sistema web de ventas con carrito. Al autenticarse el usuario, el web server guarda en su RAM los datos del usuario y de la sesión (nombre, identificador de sesión) para agilizar respuestas y controlar la vigencia; una sesión vive hasta una hora sin actividad. Los productos del carrito también viven en una colección en RAM. Web server y base de datos están en la misma máquina. ¿Qué problemas aparecen si la carga aumenta mucho, y qué tácticas aplicar?</p>
+
+  <h4 id="qa2-ej15-problemas">Problemas</h4>
+  <ul>
+    <li><b>La memoria se agota:</b> más usuarios, más estado en RAM, y cuando explota se cae el único web server.</li>
+    <li><b>Conexiones:</b> una sola máquina tiene puertos y una cola de requests finita; con más clientes se satura y la espera crece para los últimos.</li>
+    <li><b>Escalar vertical tiene techo;</b> escalar horizontal tal cual está obliga a que cada cliente vaya siempre al mismo server (su sesión vive ahí) y replica también la base, con costos de licencias, backups y motores múltiples.</li>
+  </ul>
+
+  <h4 id="qa2-ej15-stateless">Separar nodos, stateless y load balancer</h4>
+  <p><b>Separar web server y base de datos</b> en máquinas distintas: además de separar responsabilidades, permite escalar cada parte por su cuenta. Si el cuello de botella son los web servers, se escalan solo ellos.</p>
+  <div class="def"><b>Stateless.</b> Táctica que hace que los servidores no guarden localmente el estado de la sesión, para que cualquier cliente pueda ser atendido por cualquier nodo del cluster.</div>
+  <p>El estado (datos de usuario y carrito) puede ir a un servidor de cache, a la base de datos o al propio cliente: el navegador guarda su estado y lo manda en cada request. No siempre es lo ideal, pero es una opción. La alternativa, sincronizar sesiones entre servers, se intentó hace tiempo y era muy difícil de mantener. Para que el cluster funcione falta un <b>load balancer</b> repartiendo requests; si los servers siguieran guardando sesión, el balanceador tendría que recordar a qué server fue cada browser.</p>
+
+  <figure class="diag">
+    <svg viewBox="0 0 540 260" role="img" aria-label="Arquitectura final del ejercicio 15: browsers, load balancer, cluster de web servers stateless con estado de sesion en un cache, cola de mensajes con workers, y cluster de base de datos con primario, secundario de solo lectura y shards">
+      <defs>
+        <marker id="qa2ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--linea)"/>
+        </marker>
+      </defs>
+      <rect x="10" y="110" width="70" height="40" rx="8" fill="none" stroke="var(--linea)" stroke-width="2"/>
+      <text x="45" y="135" text-anchor="middle" fill="currentColor" font-size="12">browsers</text>
+      <rect x="105" y="110" width="70" height="40" rx="8" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="140" y="128" text-anchor="middle" fill="currentColor" font-size="11">load</text>
+      <text x="140" y="142" text-anchor="middle" fill="currentColor" font-size="11">balancer</text>
+      <rect x="200" y="70" width="100" height="120" rx="10" fill="none" stroke="var(--linea)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="250" y="64" text-anchor="middle" fill="currentColor" font-size="11">web cluster</text>
+      <rect x="215" y="85" width="70" height="28" rx="6" fill="none" stroke="var(--linea)" stroke-width="2"/>
+      <text x="250" y="104" text-anchor="middle" fill="currentColor" font-size="11">web</text>
+      <rect x="215" y="120" width="70" height="28" rx="6" fill="none" stroke="var(--linea)" stroke-width="2"/>
+      <text x="250" y="139" text-anchor="middle" fill="currentColor" font-size="11">web</text>
+      <rect x="215" y="155" width="70" height="28" rx="6" fill="none" stroke="var(--linea)" stroke-width="2"/>
+      <text x="250" y="174" text-anchor="middle" fill="currentColor" font-size="11">web</text>
+      <rect x="205" y="10" width="90" height="34" rx="8" fill="none" stroke="var(--acc2)" stroke-width="2"/>
+      <text x="250" y="31" text-anchor="middle" fill="var(--acc2)" font-size="11">cache sesión</text>
+      <rect x="205" y="215" width="90" height="34" rx="8" fill="none" stroke="var(--acc2)" stroke-width="2"/>
+      <text x="250" y="236" text-anchor="middle" fill="var(--acc2)" font-size="11">cola + workers</text>
+      <rect x="340" y="40" width="190" height="180" rx="10" fill="none" stroke="var(--linea)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="435" y="34" text-anchor="middle" fill="currentColor" font-size="11">cluster de base de datos</text>
+      <rect x="355" y="60" width="75" height="34" rx="6" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="392" y="81" text-anchor="middle" fill="currentColor" font-size="11">primario</text>
+      <rect x="445" y="60" width="75" height="34" rx="6" fill="none" stroke="var(--linea)" stroke-width="2"/>
+      <text x="482" y="75" text-anchor="middle" fill="currentColor" font-size="10">secundario</text>
+      <text x="482" y="88" text-anchor="middle" fill="currentColor" font-size="10">(lecturas)</text>
+      <line x1="430" y1="77" x2="443" y2="77" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#qa2ar2)"/>
+      <text x="435" y="115" text-anchor="middle" fill="var(--acc2)" font-size="10">réplica: mismos datos, con retraso</text>
+      <rect x="355" y="140" width="75" height="34" rx="6" fill="none" stroke="var(--linea)" stroke-width="2"/>
+      <text x="392" y="161" text-anchor="middle" fill="currentColor" font-size="11">shard 1</text>
+      <rect x="445" y="140" width="75" height="34" rx="6" fill="none" stroke="var(--linea)" stroke-width="2"/>
+      <text x="482" y="161" text-anchor="middle" fill="currentColor" font-size="11">shard 2</text>
+      <text x="435" y="196" text-anchor="middle" fill="var(--acc2)" font-size="10">partición: datos distintos</text>
+      <line x1="80" y1="130" x2="103" y2="130" stroke="var(--linea)" stroke-width="2" marker-end="url(#qa2ar2)"/>
+      <line x1="175" y1="130" x2="198" y2="130" stroke="var(--linea)" stroke-width="2" marker-end="url(#qa2ar2)"/>
+      <line x1="250" y1="70" x2="250" y2="46" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#qa2ar2)"/>
+      <line x1="250" y1="190" x2="250" y2="213" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#qa2ar2)"/>
+      <line x1="300" y1="120" x2="338" y2="120" stroke="var(--linea)" stroke-width="2" marker-end="url(#qa2ar2)"/>
+      <path d="M 295 232 L 320 232 L 320 160 L 338 160" fill="none" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#qa2ar2)"/>
+    </svg>
+    <figcaption>Hacia dónde evoluciona el ejercicio: web servers stateless detrás de un balanceador, sesión afuera, réplicas para disponibilidad y lecturas, shards para escrituras y una cola con workers para desacoplar la escritura.</figcaption>
+  </figure>
+
+  <h4 id="qa2-ej15-replicas">La base de datos: réplicas</h4>
+  <p>Si el negocio anda bien y se siguen sumando web servers, el cuello pasa a ser la base: si no soporta las conexiones o se cae unos minutos, se cae todo, porque la funcionalidad central depende de ella (quizás algo sobreviva leyendo del cache, como ver el perfil sin modificarlo).</p>
+  <p><b>Primario y secundario.</b> El cluster de base de datos expone un punto de contacto (un DNS) que apunta al primario, y un mecanismo de replicación mantiene al secundario más o menos sincronizado. Es <b>redundancia pasiva</b>: si el primario cae, el secundario se promueve a primario y después se recupera o levanta otro como secundario.</p>
+  <div class="warn"><b>Esto no resuelve la carga.</b> Una réplica pasiva mejora la disponibilidad ante una falla (se rompió el proceso, alguien pateó el enchufe), pero si el tráfico supera lo que aguanta el primario, sigue sin alcanzar.</div>
+  <p><b>Réplicas de lectura.</b> Los servicios conocen además un nodo de solo lectura (el secundario) y le mandan lecturas; las escrituras siguen yendo al primario. Así se reparte la carga, sobre todo en aplicaciones read-intensive (muchos miran, pocos publican). Algunas bases ofrecen un nodo router que hace esta distribución.</p>
+  <div class="riesgo"><b>Leer del secundario no da igual.</b> La replicación no es instantánea (microsegundos, milisegundos, o más si la sincronización se corta un rato): el secundario puede tener datos viejos. Es consistencia eventual. Hay que elegir a propósito qué casos de uso pueden leer de ahí: reportes del mes pasado (datos históricos que ya no cambian) sí; lo que necesite el dato al último milisegundo, no.</div>
+
+  <h4 id="qa2-ej15-sharding">Muchas escrituras: sharding</h4>
+  <p>Si la aplicación es write-intensive y un solo primario no da abasto, replicar no alcanza. Réplicas son copias con los mismos datos; <b>particiones o shards</b> son nodos con datos distintos. Es escalabilidad horizontal (vertical es darle más recursos a un nodo; horizontal es sumar nodos).</p>
+  <ul>
+    <li>Hay que definir un <b>criterio de partición</b> (el ejemplo "a propósito malo": usuarios con email de la A a la F al shard 1, el resto al 2).</li>
+    <li>Cada shard es un nodo de base distinto, con su pool de conexiones y su ancho de banda. No es lo mismo que un único servidor repartiendo en varios discos, donde las conexiones a ese nodo siguen siendo el límite.</li>
+    <li>La <b>lógica de sharding</b> tiene que vivir en algún lado: o cada aplicación calcula la sharding key y sabe a qué nodo ir, o hay un router intermedio que decide. Lo segundo lo ofrecen varios motores, sobre todo NoSQL.</li>
+  </ul>
+  <p class="nota">El auge de las bases NoSQL, hace un par de décadas, vino en buena parte de que resolvían escalabilidad por particionamiento mucho mejor que las relacionales, donde particionar era crear otra instancia y decidir a mano qué va dónde, y el modelo relacional tiende a consultas que atraviesan todas las particiones. Pero no toda base es fácil de particionar.</p>
+
+  <h4 id="qa2-ej15-colas">Colas de mensajes y workers</h4>
+  <p>Otra propuesta: en lugar de escribir directo, el web server deja el pedido (una compra) en una <b>cola de mensajes</b>, que es un nodo aparte, y contesta enseguida "recibimos tu pedido". Un <b>worker</b> (un servidor con un proceso tipo <code>while true</code> que hace polling de la cola) lo desencola y escribe en la base. Los workers también pueden ser un cluster, lo que aumenta los mensajes procesados por unidad de tiempo.</p>
+  <div class="warn"><b>Convierte la interacción en asincrónica.</b> Si el cliente necesita la respuesta en el mismo request-response, pasar por cola, worker, base y volver es inviable: agrega eslabones y demora. Con colas, se le contesta que el pedido fue recibido y más tarde se le notifica (por mail u otro medio) que se confirmó. Cada sistema decide según sus requerimientos.</div>
+
+  <h3 id="qa2-performance-muestreo">Tácticas de performance: muestreo</h3>
+  <p>Para mejorar la capacidad de procesamiento (throughput), en lugar de procesar absolutamente todos los eventos se pueden agrupar o procesar uno de cada N: reducir la tasa de muestreo. Otras tácticas del mismo grupo son priorizar eventos y eliminar elementos intermedios para reducir el overhead de comunicación.</p>
+  <div class="ej"><b>Ejercicio 13.</b> Un sistema recolecta muestras de un satélite a 10 por minuto y varias veces por día no llega a procesar las 10 dentro del minuto. Bajar el sampling rate es candidato, siempre que el dominio permita descartar eventos: se hace trade-off entre la precisión del cálculo y la cantidad de muestras procesadas. Si hay que procesar todas, la táctica no sirve.</div>
+  <div class="idea"><b>Corolario.</b> No todas las tácticas sirven siempre: igual que los patrones de diseño, cada una tiene un contexto.</div>
+
+  <div class="examen"><b>Preguntas típicas de este tema.</b> Definir visibilidad completa (monitorear <i>o mediar</i>, atributo del sistema y no del componente) con ejemplos: firewall, cache, monitoreo; su trade-off con seguridad. Diferenciar fiabilidad de disponibilidad (adentro vs afuera). Enumerar los subatributos de seguridad. Distinguir los subatributos de modificabilidad (evolucionabilidad, extensibilidad, personalizabilidad, configurabilidad, reusabilidad) con un ejemplo de cada uno. Qué hace falta para afirmar que algo es extensible. Cohesión, acoplamiento y binding time como parámetros de modificabilidad. Dado un sistema con estado en memoria: problemas al escalar y tácticas (stateless, load balancer, réplicas y consistencia eventual, sharding, colas).</div>
+</section>

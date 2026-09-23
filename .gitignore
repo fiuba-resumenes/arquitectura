@@ -1,0 +1,6 @@
+# Material de terceros: no se republica (PDFs de diapositivas de la catedra).
+*.pdf
+
+# Python
+__pycache__/
+*.pyc

@@ -1,0 +1,313 @@
+<section class="unidad" id="performance" data-titulo="Performance y red conceptual">
+  <h2>3. Performance y la red conceptual</h2>
+  <p class="intro">Este capítulo cierra el primer bloque de atributos de calidad: performance (en la red, percibida por el usuario y como eficiencia), su relación con escalabilidad y disponibilidad, y las primeras tácticas concretas para disponibilidad y performance. Después da un paso atrás y arma la red conceptual de la materia: cómo un objetivo de negocio termina, a través de requerimientos, atributos de calidad y tácticas, en los elementos y estructuras que forman la arquitectura. Es el argumento de por qué se estudia arquitectura de software.</p>
+
+  <h3 id="performance-definicion">Performance: reaccionar a eventos a tiempo</h3>
+  <div class="def"><b>Performance.</b> Habilidad del sistema para reaccionar ante ciertos eventos en un determinado tiempo. Se expresa, por ejemplo, como cantidad de transacciones procesadas por minuto o como el tiempo que pasa entre un evento y la reacción del sistema.</div>
+  <p>La imagen es: hay calma, pasa algo, ese evento desencadena trabajo, y se mide cuánto se tarda en reaccionar. Los eventos pueden ser:</p>
+  <ul>
+    <li><b>Interrupciones de hardware:</b> típico de embebidos (vence un timer, llega un paquete).</li>
+    <li><b>Mensajes</b> de otro componente.</li>
+    <li><b>Pedidos</b> de un usuario (apretar un botón) o de otro sistema (un request).</li>
+    <li><b>Paso del tiempo:</b> eventos que se disparan solos, periódicamente.</li>
+  </ul>
+  <table>
+    <thead><tr><th>Naturaleza del evento</th><th>Cómo llega</th><th>Ejemplo</th></tr></thead>
+    <tbody>
+      <tr><td><b>Periódico</b></td><td>Con frecuencia fija y rígida.</td><td>Cada 10 ms, sistemas de tiempo real. En una incubadora, la presión y el ritmo cardíaco del bebé se miden periódicamente, no "cuando haya ganas".</td></tr>
+      <tr><td><b>Estocástico</b></td><td>Sin frecuencia rígida, pero con una tasa estadística conocida en un intervalo.</td><td>Un servidor web que atiende 100 requests por segundo.</td></tr>
+      <tr><td><b>Esporádico</b></td><td>No pasa nunca, hasta que pasa.</td><td>Una alarma.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="performance-fielding">Bolitas y flechitas: la interacción define la performance</h3>
+  <p>Fielding plantea que la interacción entre los elementos de la arquitectura determina tanto la velocidad y eficiencia en el uso de la red como la performance que percibe el usuario. Y la arquitectura es la que define la naturaleza de esa interacción: qué elementos hay (las bolitas) y cómo se comunican (las flechitas). Más bolitas implica más flechitas, y más flechitas implica más comunicación. Como la comunicación es normalmente muchísimo más lenta que el procesamiento, lo que pasa por la red suele dominar la performance (salvo casos puramente de cómputo, como minar bitcoins).</p>
+  <div class="warn"><b>Una bolita no es un servicio, una flecha no es REST.</b> La tendencia es imaginar cada bolita como un servicio web y cada flecha como HTTP o TCP/IP. No necesariamente: dos bolitas pueden ser dos procesos en la misma máquina, y una flecha puede ser REST, UDP, un protocolo custom o un simple pipe entre dos procesos locales. Dicho en clase: esto tiene que quedar clavado.</div>
+  <p>La performance suele estar acotada por cuatro cosas:</p>
+  <ol>
+    <li><b>Los requerimientos del sistema</b>, que imponen un costo básico: si los datos están en A y se usan en B, hay dos bolitas y no se puede prescindir de esa comunicación.</li>
+    <li><b>El estilo de interacción elegido</b>: cuántas interacciones hacen falta para ir de A a B.</li>
+    <li><b>La materialización de la arquitectura</b>: la misma idea puede bajarse a tierra mejor o peor.</li>
+    <li><b>La implementación de cada componente</b>: qué tan rápido genera o consume datos.</li>
+  </ol>
+
+  <h4 id="performance-cuando-optimizar">¿Cuándo atacar la performance?</h4>
+  <p>Hay dos caminos: sobre la aplicación ya funcionando (instrumentar, medir y optimizar en base a las mediciones), o de manera temprana, en cada decisión de arquitectura. En la carrera se repite "no optimices temprano", y en algoritmos tiene sentido. En arquitectura es relativo: la arquitectura está al principio del proceso de desarrollo, y cuanto más tarde se corrige una falla de las etapas iniciales, más cara sale. Algunas decisiones de arquitectura no se revierten ni se arreglan con optimizaciones tardías.</p>
+  <div class="idea"><b>La recomendación de la cátedra.</b> Mirar desde el arranque qué requerimientos de performance hay y hacerse cargo. Si aparece un escenario desafiante de performance, atacarlo ya, no postergarlo. Pero sin sobreingeniería: si no hay ninguna razón, no se optimiza.</div>
+
+  <h3 id="performance-network">Network performance</h3>
+  <div class="def"><b>Throughput.</b> Velocidad de transmisión de información entre componentes. Incluye los datos de la aplicación (payload) más el overhead, que puede venir del setup inicial o de cada interacción. Es siempre "algo sobre tiempo": bits por segundo, o transacciones o requests por segundo (tx/s, tps), que es lo típico en servidores REST.</div>
+  <p>Del otro lado está la <b>carga</b>: cuánto le va a llegar al sistema para procesar. Si no se la procesa, cae la disponibilidad.</p>
+  <div class="def"><b>Capacity.</b> Máximo throughput, o carga máxima, que soporta el sistema. Ej.: "el throughput actual es de 100 requests por segundo, pero sin escalar tenemos capacity para 400".</div>
+  <p>La capacity suele ser relevante porque es lo que termina comprometido en el SLA. Se mide con un <b>load test</b>: inyectarle carga al sistema (requests, tráfico) con transacciones representativas (frecuentes, típicas) hasta encontrar el punto en que corta.</p>
+  <div class="ej"><b>El caño del proveedor de internet.</b> Un plan hogareño "de 300 megabits" no compromete esa velocidad: a veces es un poco más, a veces un poco menos, y lo que se publica es la bajada (la subida casi nunca). Una empresa que necesita mandar muchos datos pacta por contrato bajada y subida, con penalidades si no se cumplen. Se puede exigir, pero se paga bastante más: el throughput también entra en el acuerdo de servicio, no solo la disponibilidad.</div>
+  <div class="def"><b>Bandwidth y usable bandwidth.</b> El bandwidth (ancho de banda) es el máximo throughput disponible en un canal de comunicación: lo máximo que pasa por el caño físico. El usable bandwidth es la porción de ese ancho de banda disponible para la aplicación en cuestión.</div>
+  <div class="ej"><b>YouTube contra el sistema de facturación.</b> Una empresa tiene un caño de 1000 megabits. Los empleados facturan, pero también miran videos con auriculares. Los videos saturan el caño y al que quiere trabajar el sistema no le anda. Solución: partir el caño y garantizarle a cada aplicación un pedazo (a YouTube, por ejemplo, el 10%, 100 megabits). Esto normalmente lo resuelve el equipo de infraestructura y redes.</div>
+  <p>Según Fielding, los estilos de arquitectura definen la cantidad de interacciones por request y la granularidad de los datos que viajan. El caso extremo de mejor performance es no usar la red en absoluto. Los estilos más eficientes minimizan los accesos:</p>
+  <ul>
+    <li><b>Eliminando la necesidad:</b> mover los datos cerca de donde se usan.</li>
+    <li><b>Reduciendo la frecuencia:</b> ir a buscarlos menos veces.</li>
+    <li><b>Reusando interacciones pasadas:</b> un caché, por ejemplo.</li>
+  </ul>
+  <p>Ahí está la inteligencia de un estilo: bolitas y flechitas puestas con un sentido, como antes eran los patrones.</p>
+
+  <h3 id="performance-percibida">User-perceived performance</h3>
+  <p>Mediciones desde el punto de vista del usuario. Ojo: el usuario puede ser humano o máquina (si un servicio llama a otro, el primero es usuario del segundo).</p>
+  <div class="def"><b>Completion time (response time).</b> Tiempo que requiere el sistema para completar un request, medido desde afuera, desde la óptica del que pide. Es difícil de medir porque los tiempos son chicos, variables y dependen de parámetros.</div>
+  <div class="ej"><b>Pagar en una billetera virtual.</b> En el backend hay un servicio que formalmente ejecuta el pago, y se monitorea cuánto tarda. Pero lo más importante no es eso, sino lo que percibe el cliente: desde que toca "pagar" hasta que ve la pantalla de éxito o fracaso. Eso incluye la llamada del front al back y hasta la animación previa a la pantalla final.</div>
+  <p>La <b>latencia</b> es interesante porque los autores la definen distinto:</p>
+  <table>
+    <thead><tr><th>Autor</th><th>Latencia es...</th><th>Ejemplo</th></tr></thead>
+    <tbody>
+      <tr><td><b>Fowler</b></td><td>El tiempo mínimo que necesita el sistema para ejecutar cualquier request, incluido "no hacer nada".</td><td>Llamar a un endpoint REST vacío: se paga la comunicación, la velocidad del servidor y una respuesta vacía. Ningún endpoint real puede tardar menos que eso.</td></tr>
+      <tr><td><b>Fielding</b></td><td>El tiempo entre el estímulo inicial y la primera indicación de respuesta.</td><td>Apretar play en una plataforma de streaming y medir hasta que llega el primer frame: ahí se ve que algo empezó a pasar.</td></tr>
+    </tbody>
+  </table>
+  <div class="def"><b>Responsiveness.</b> Tiempo que requiere el sistema para aceptar (acknowledge) un request. Una progress bar mejora la responsiveness, porque el usuario ve que el pedido fue aceptado y algo está pasando, pero no mejora en nada el completion time.</div>
+
+  <h4 id="performance-tradeoff-interno">Un trade-off dentro de la propia performance</h4>
+  <p>Optimizar responsiveness suele empeorar el completion time, y viceversa. El ejemplo es bajar un archivo grande de un servidor:</p>
+
+  <figure class="diag">
+    <svg viewBox="0 0 520 190" role="img" aria-label="Comparación de dos estrategias para transferir un archivo grande. Opción A: se empieza a mandar ya, el primer byte llega enseguida pero la transferencia completa es larga. Opción B: se comprime primero, el primer byte tarda más pero la transferencia total termina antes.">
+      <text x="10" y="22" fill="currentColor" font-size="13">A: mandar ya, sin comprimir</text>
+      <rect x="10" y="32" width="440" height="26" rx="4" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <text x="230" y="50" text-anchor="middle" fill="currentColor" font-size="12">transferencia de todos los bytes</text>
+      <path d="M 12 70 L 12 60" stroke="var(--acc)" stroke-width="2"/>
+      <text x="16" y="82" fill="var(--acc)" font-size="11">primer byte enseguida</text>
+      <text x="450" y="82" text-anchor="end" fill="var(--acc2)" font-size="11">termina tarde</text>
+
+      <text x="10" y="116" fill="currentColor" font-size="13">B: comprimir y después mandar</text>
+      <rect x="10" y="126" width="110" height="26" rx="4" fill="none" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="65" y="144" text-anchor="middle" fill="var(--acc2)" font-size="12">comprimir</text>
+      <rect x="120" y="126" width="220" height="26" rx="4" fill="none" stroke="var(--linea)" stroke-width="1.5"/>
+      <text x="230" y="144" text-anchor="middle" fill="currentColor" font-size="12">menos bytes</text>
+      <path d="M 122 164 L 122 154" stroke="var(--acc)" stroke-width="2"/>
+      <text x="126" y="176" fill="var(--acc)" font-size="11">primer byte tarde</text>
+      <text x="340" y="176" text-anchor="end" fill="var(--acc2)" font-size="11">termina antes</text>
+    </svg>
+    <figcaption>A gana en latencia y responsiveness; B gana en completion time porque viajan menos bytes. Cuál conviene depende de quién está del otro lado.</figcaption>
+  </figure>
+
+  <p>¿Cuál es mejor? Depende del problema. Los diarios online de la época de conexiones lentas mostraban placeholders en lugar de las imágenes y las iban reemplazando a medida que bajaban (incluso dibujándolas línea por línea): valoraban la responsiveness, porque del otro lado había un humano que quería leer el texto y ver que algo pasaba. Si en cambio se arma un web spider o crawler que baja un sitio entero, no hay ningún humano mirando: se prioriza el completion time. El mismo web server puede tener que optimizarse sin saber si del otro lado hay un browser (prefiere responsiveness) o un spider (prefiere completion time).</p>
+
+  <h3 id="performance-eficiencia">Eficiencia y carga</h3>
+  <div class="def"><b>Eficiencia.</b> Performance por recurso consumido. Cumplir un pedido consume recursos, y el sistema puede estar sirviendo varios pedidos a la vez. Ej.: "20 tps usando 2 procesadores". En general, se puede leer como performance obtenida por plata invertida en hardware.</div>
+  <div class="ej"><b>Fiat contra Audi.</b> Ir a 100 km/h en un Fiat o a 120 km/h en un Audi: pagar lo que vale el Audi por 20 km/h más no es negocio. Con el hardware pasa lo mismo: cuántos procesadores hacen falta para soportar 20 transacciones por segundo mide qué tan eficiente es el sistema.</div>
+  <div class="def"><b>Carga (load) y load sensitivity.</b> La carga es la cantidad de stress sobre el sistema. La load sensitivity es la variación del response time en función de la carga, es decir, cómo se degrada la performance. Ej.: "el response time es de 1 s con 20 usuarios, pero degrada a 3 s con 25".</div>
+  <p>A más carga, la performance se degrada, y se puede graficar cómo cae la velocidad (o crece el response time) a medida que sube la carga, hasta morir. Por eso escalabilidad y performance están tan ligadas: escalar es dar más recursos, y a igual carga, más recursos hacen que el sistema vaya más rápido (o que soporte más carga a igual velocidad).</p>
+  <div class="warn"><b>Morirse no es llegar a cero.</b> Muchas veces una performance baja ya cuenta como indisponibilidad, porque no cumple el SLA o los requerimientos del negocio. Morirse es, muchas veces, "not good enough".</div>
+  <p>No hay tablas que digan "este procesador soporta tanto": la eficiencia de un sistema se mide con load tests, viendo cuánto se logra como máximo según lo que se invirtió.</p>
+
+  <h3 id="performance-escalar">Escalar: medir primero, degradar antes que morir</h3>
+  <p>Repaso de las dos formas de escalar, ahora desde el costo. La <b>vertical</b> (scaling up) es fácil: abrir la máquina y ponerle más hardware. Pero es limitada, y cuando se llega al tope toca comprar lo más caro que haya: cada vez se paga mucho más por poca mejora. La <b>horizontal</b> (scaling out) permite poner muchas máquinas estándar y baratas, se paga menos y se escala más, pero es más complicada: el sistema tiene que estar preparado para funcionar en varios nodos. No hay una mejor que otra: si existiera una receta, no habría dos caminos.</p>
+  <ul>
+    <li><b>Primero, ¿se cumple?</b> Si el sistema cumple sus requerimientos, no se escala. Si no cumple, se escala, sabiendo a dónde se quiere llegar.</li>
+    <li><b>No a ojo.</b> Se mide antes cuánto rinde una instancia (por ejemplo, unos 100 usuarios por segundo) y se multiplica. No se trata de "tirale una, dos, tres máquinas y fijate".</li>
+    <li><b>Elasticidad.</b> En la nube se puede configurar autoscaling: arrancar con un mínimo de instancias y sumar o quitar según una métrica (por ejemplo, si la memoria libre baja de cierto umbral, sumar dos). Sin nube hay que hacerlo a mano, y sin virtualización hay que prender hardware.</li>
+    <li><b>Qué recurso agregar depende del problema.</b> Minar bitcoins pide núcleos rápidos, guardar fotos y videos pide disco, IA pide placas de video. Primero el problema, después el recurso.</li>
+  </ul>
+  <p>Una pregunta de clase: ¿escalar horizontalmente no agrega el riesgo de la red? La respuesta: si el problema es un tráfico enorme, ese millón de usuarios es el mismo millón con una máquina o con muchas; si el canal no lo banca, el problema existe antes de elegir cómo escalar.</p>
+  <div class="idea"><b>Escalabilidad horizontal también es disponibilidad.</b> Con una sola máquina, si se quema la fuente, se cae todo. Con cuatro, puede romperse una (o hasta dos a la vez) y el sistema sigue vivo con las restantes, degradado (perder una de cuatro es perder un 25%), pero vivo. La prioridad es siempre dar servicio, aunque sea degradado, antes que no darlo.</div>
+
+  <h3 id="performance-tacticas-disponibilidad">Tácticas de disponibilidad</h3>
+  <p>Objetivo: mantener al sistema, a pesar de las fallas, dentro de su especificación. Se piensan en tres momentos: prevenir la caída; si no se logra, detectarla rápido; y detectarla rápido para poder recuperarse rápido.</p>
+
+  <h4 id="performance-deteccion">Detección</h4>
+  <div class="def"><b>Ping/Echo.</b> Un componente monitor hace ping al monitoreado y espera que éste responda echo en un tiempo predefinido. Si no responde, se lo considera muerto y se avisa.</div>
+  <p>Que responda el echo solo dice que el proceso está arriba. Se puede enriquecer: pedirle algo que pruebe que funciona (a una calculadora, "2 + 2" y esperar 4). Existe también la variante jerárquica: cada monitor controla a los de su dominio, y su propia sanidad depende de la de lo que está abajo (el que pinguea a X no sabe que X depende de un sensor; X lo encapsula). Esto reduce el flujo de mensajes.</p>
+  <div class="def"><b>Heartbeat/Watchdog.</b> Al revés que ping/echo: el componente monitoreado es el que emite latidos periódicos ("estoy vivo"), y otro los escucha. Si pasa cierto tiempo sin latido, se asume la falla y se notifica al componente corrector. El latido puede llevar información (por ejemplo, el log de la última transacción).</div>
+  <div class="ej"><b>La policía y la bolita.</b> En ping/echo, la policía pregunta cada diez segundos "¿seguís viva?" y la bolita contesta; si un día hay silencio, murió. En heartbeat, la policía no manda nada: es la bolita la que cada diez segundos dice "estoy viva", y si la policía deja de escucharla, levanta la mano. Al final es lo mismo, un monitor vigilando a un componente; cambia solo quién inicia el intercambio.</div>
+  <p>¿Y quién vigila a la policía? Otra policía, jerárquica, y así hasta cansarse y aceptar un single point of failure. La pregunta siempre es cuánto se está dispuesto a complicar el sistema: si se cae el monitor, lo peor que puede pasar quizás es una alerta falsa a las dos de la mañana, y hay que ver si eso amerita más infraestructura.</p>
+  <div class="def"><b>Voting.</b> Varios procesos replicados (en distintos procesadores) reciben los mismos inputs y mandan su output a un componente votante. Si no coinciden, se detecta una anomalía y se resuelve por mayoría (majority rules) o prefiriendo un componente (preferred component). Es táctica de detección y de recuperación.</div>
+  <div class="ej"><b>Diversidad: el mismo bug dos veces.</b> Con dos sensores idénticos en un avión, si uno dice 10 grados y otro 20, se sabe que uno está roto. Pero si el problema es un bug de software (por ejemplo, en un algoritmo de validación biométrica), correr la misma implementación en dos servidores da el mismo output equivocado en los dos: el voting coincide y ambos están mal. La protección real es la diversidad: implementaciones hechas por equipos distintos, sin hablar entre sí, en plataformas distintas. Funciona mejor, pero es cara (se paga dos desarrollos). ¿Amerita? En un avión o una incubadora, sí; para elegir entre muzzarella y napolitana en una pizzería, no.</div>
+  <p>Con solo dos votantes que divergen no se sabe cuál tiene razón; por eso se usan tres o más, o se define un preferido (el sensor caro sobre el de backup barato, y el barato solo si el caro murió).</p>
+
+  <h4 id="performance-spof">Single point of failure</h4>
+  <div class="def"><b>Single point of failure (SPOF).</b> Un eslabón único cuya caída tira abajo todo el sistema.</div>
+  <p>Una sola máquina es un SPOF. Cuatro máquinas ya no, pero si las cuatro dependen de una única base de datos (o de un único server), esa pieza pasa a ser el SPOF: poco importa tener cuatro si todas dependen de una. Donde hay un SPOF hay un riesgo de que todo se vaya al diablo: o se elimina, o se lo cuida como oro. Cómo replicar una base de datos es un tema aparte, con una clase propia.</p>
+  <div class="examen">Dicho en clase: el concepto de single point of failure "es clave".</div>
+
+  <h4 id="performance-recuperacion">Recuperación</h4>
+  <p>Los SPOF se evitan con redundancia, que puede ser de tres tipos, y ninguna es gratis:</p>
+  <table>
+    <thead><tr><th>Redundancia</th><th>Qué agrega</th><th>Qué cuesta</th></tr></thead>
+    <tbody>
+      <tr><td><b>De información</b></td><td>Datos extra en la transmisión o el almacenamiento para detectar o corregir errores (checksum).</td><td>Se comunica más información.</td></tr>
+      <tr><td><b>De tiempo</b></td><td>Repetir acciones: leer el sensor tres veces, correr un algoritmo dos veces. Útil para fallas transitorias.</td><td>Tiempo y procesamiento.</td></tr>
+      <tr><td><b>Física</b></td><td>Hardware y software extra para bancar que falle un componente (los cuatro nodos de la escalabilidad horizontal).</td><td>Recursos duplicados.</td></tr>
+    </tbody>
+  </table>
+  <table>
+    <thead><tr><th>Táctica</th><th>Cómo funciona</th><th>Downtime</th></tr></thead>
+    <tbody>
+      <tr><td><b>Redundancia activa</b> (hot restart)</td><td>Todos los componentes redundantes reciben y procesan el mismo input en paralelo, sincronizados. Se usa la respuesta del primero y se descartan las otras. Hay que garantizar que los mensajes lleguen a todos.</td><td>Muy corto (ms) o nulo: la otra máquina ya está trabajando.</td></tr>
+      <tr><td><b>Redundancia pasiva</b> (warm restart)</td><td>Solo el primario recibe los eventos y le pasa actualizaciones periódicas de estado a los standby (la sincronización es responsabilidad del primario). Si cae, un standby toma el control (takeover).</td><td>El tiempo de detectar y switchear: bastante más lento que la activa, bastante más rápido que salir a conseguir otra máquina.</td></tr>
+      <tr><td><b>Spare</b> (cold restart)</td><td>Una plataforma completa configurada para reemplazar distintos componentes: hay que reiniciarla con el software correcto y actualizar su estado (ayudan los checkpoints periódicos).</td><td>Del orden de minutos.</td></tr>
+    </tbody>
+  </table>
+  <p>¿Por qué tener un standby quieto en vez de usarlo? Porque uno solo puede cubrir a varios primarios (diez bolitas distintas), y porque muchas veces el software no está preparado para correr en dos instancias a la vez: lo más común es tener el sistema simple con una sola bolita activa. La sincronización que manda el primario sirve para que, si el standby toma su lugar, tenga en memoria los datos que tenía el caído.</p>
+  <div class="ej"><b>Cuarenta workstations de repuesto.</b> Los spares no son solo servidores. En una fábrica de impresoras con línea de montaje, cada operaria tiene su workstation para registrar su paso; si una se rompe, se para la línea entera. Por eso la fábrica tenía 40 máquinas de spare: su negocio dependía de las workstations.</div>
+
+  <h4 id="performance-prevencion">Prevención</h4>
+  <ul>
+    <li><b>Removal from service:</b> retirar el componente periódicamente para anticiparse a las fallas, automática o manualmente. El caso típico: reinicios periódicos contra memory leaks. En la misma fábrica, el servidor se moría cada semana; reiniciarlo semanalmente era más barato que buscar y corregir la falla, y vivían con eso.</li>
+    <li><b>Transactions:</b> pasos secuenciales que se hacen todos o ninguno, para no dejar estados inconsistentes por el error de un paso o una colisión de threads.</li>
+    <li><b>Process monitor:</b> cuando se detecta una falla, un proceso de monitoreo puede detener el componente, relanzarlo o recuperar su estado. Con monitoreo y alarmas es preferible que alguien se despierte cuando la memoria cae mucho y no cuando ya se cayó todo. Ej. en la nube: instancias que quedan "unhealthy" disparan una alarma, se levantan instancias nuevas y se matan las raras.</li>
+  </ul>
+  <div class="ej"><b>Segmentar por país.</b> Un checkout que procesa decenas de millones de pagos por día se parte en muchas bolitas (redundancia) y además por site o país: lo de Brasil va por un conjunto, lo de Argentina por otro, lo de México por otro. Si se cae Brasil (incluso por un bug, que se replicaría en todas las instancias de ese segmento), el resto ni se entera.</div>
+  <div class="ej"><b>El tsunami después de la caída.</b> Tras una caída en hora pico, cuando se vuelve se encuentra toda la gente que estuvo esperando para operar, y la infraestructura no llega a escalar a esa velocidad. Lo que se hace: descartar el tráfico y dejarlo pasar a cuentagotas mientras se multiplica la infraestructura, y recién ahí abrir la compuerta. Detección, alarmas y respuesta son un mundo en sí mismo que excede esta materia.</div>
+
+  <h3 id="performance-tacticas-performance">Tácticas de performance</h3>
+  <p>Objetivo: reducir el tiempo de respuesta a un evento (la latencia). Cada parte agrega latencia, y la pregunta es cuál es el cuello de botella. Las demoras vienen de recursos que faltan: de hardware (CPU, storage, bandwidth, memoria) o de software (buffers, critical sections, colas, semáforos). Un proceso puede quedar bloqueado por:</p>
+  <ul>
+    <li><b>Disputa de recursos:</b> espera porque otro está usando un recurso compartido.</li>
+    <li><b>Disponibilidad de recursos:</b> el recurso está offline o en falla.</li>
+    <li><b>Dependencia de resultados:</b> necesita el input de otro proceso que no terminó (inputs en paralelo contra inputs en serie).</li>
+  </ul>
+  <table>
+    <thead><tr><th>Demanda de recursos</th><th>Gestión de recursos</th><th>Arbitraje de recursos</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Reducir la cantidad de eventos (¿cada cuánto llegan? Ej.: bajar el sampling, aunque no siempre se puede). Reducir el consumo de recursos por evento (ej.: algoritmos más eficientes).</td>
+        <td>Concurrencia (reduce el tiempo bloqueado). Múltiples copias (caché, varios clientes). Más recursos (CPU más rápida, más memoria, mejor red), cuidando el costo.</td>
+        <td>Política de scheduling: FIFO (todos con igual derecho), prioridad fija o prioridad dinámica (round robin, deadline más urgente). Siempre hay arbitraje; hay que entender las opciones y evitar starvation.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="nota">La cátedra no profundiza acá: son conceptos vistos en otras materias (sistemas operativos) y hacen menos a la arquitectura.</p>
+
+  <h3 id="performance-requerimientos">Requerimientos: funcionales, de atributos de calidad y restricciones</h3>
+  <ul>
+    <li><b>Requerimientos funcionales:</b> definen lo que el sistema debe hacer, sus comportamientos.</li>
+    <li><b>Requerimientos de atributos de calidad</b> (también llamados no funcionales o extra funcionales): definen cualidades de esos comportamientos. Son transversales (cross cutting): no dicen a qué función se aplican.</li>
+    <li><b>Restricciones:</b> decisiones de diseño ya tomadas que no se pueden cambiar y se aceptan como dogma. Ej.: "la base de datos tiene que ser de Microsoft".</li>
+  </ul>
+  <p>Entre atributos de calidad siempre hay un trade-off: mejorar uno suele implicar desfavorecer otros. No se puede tener todo, así que la clave es saber qué se necesita y cómo priorizar en el problema particular.</p>
+  <div class="ej"><b>El ejemplo que recorre el capítulo.</b> Una universidad tiene como objetivo de negocio "permitir realizar el 100% de los trámites administrativos de forma online". De ahí, junto con los stakeholders (directivos, usuarios), se derivan requerimientos: RF1, inscripción online a cursos; RF2, administración online de cursos y materias; RQA1, responder en menos de 2 segundos; RQA2, estar disponible 7x24. Los dos primeros son funcionales; los otros dos apuntan a performance y disponibilidad. Nadie llega con esta lista armada: recabarla es trabajo nuestro o de los analistas.</div>
+
+  <h3 id="performance-tacticas-decisiones">Tácticas: decisiones de diseño</h3>
+  <div class="def"><b>Táctica (decisión de diseño).</b> Decisión que promueve (favorece) o inhibe (desfavorece) un conjunto de atributos de calidad. Concretamente, agrega, quita o modifica elementos de la arquitectura (módulos, componentes, procesos) o las relaciones entre ellos.</div>
+  <p>En la bibliografía se habla de <i>tactics</i>, pero la mayoría las llama simplemente decisiones de arquitectura o de diseño; en el curso son sinónimos. Algún texto las llama "restricciones", palabra que la cátedra evita porque confunde. Una misma decisión afecta a uno o más atributos, a unos para bien y a otros para mal.</p>
+  <p>Ejemplos de tácticas de performance, divididas en controlar la demanda sobre los recursos y administrar los recursos en sí:</p>
+  <ul>
+    <li>Incrementar recursos: pasar de una CPU a dos, para correr en paralelo procesos paralelizables.</li>
+    <li>Usar los recursos más eficientemente: pulir un algoritmo o cambiarlo por uno más rápido.</li>
+    <li>Administrar la frecuencia de eventos: si el sistema se sobrecarga intentando procesar más de lo que puede, bajar el sampling rate.</li>
+    <li>Eliminar capas intermedias entre cliente y servidor para reducir el overhead de comunicación.</li>
+    <li>Cambiar la relación entre dos componentes: pasar ciertas transferencias de HTTP a un protocolo más liviano como UDP. Acá no se tocan los elementos sino el canal entre ellos.</li>
+  </ul>
+  <p>El trade-off también se hace entre tácticas. Primero entre atributos (para una transferencia de archivos quizás importa más la performance; para transacciones bancarias, más la seguridad, aunque tarde diez segundos más). Pero además, agregar CPU o memoria, cambiar un algoritmo o agregar índices en la base de datos apuntan todos a performance y no son equivalentes: cada uno tiene su costo, su facilidad de implementación y despliegue, y efectos distintos sobre otros atributos.</p>
+  <details class="mas"><summary>Una categorización posible de las decisiones de diseño</summary>
+    <p>Algunos libros categorizan las tácticas: asignación de responsabilidades (allocation of responsibilities), modelo de coordinación, modelo de datos, manejo de recursos, mapeo entre elementos de la arquitectura, decisiones de binding time y elección de tecnología. La cátedra la muestra como ejemplo y aclara que no es necesario estudiarla.</p>
+  </details>
+
+  <h3 id="performance-red-conceptual">La red conceptual</h3>
+  <p>La red conceptual (o red semántica) conecta todos los conceptos vistos hasta acá y justifica por qué se estudia arquitectura. Se puede recorrer en casi cualquier sentido; el recorrido natural, desde el negocio, es este:</p>
+
+  <figure class="diag">
+    <svg viewBox="0 0 520 330" role="img" aria-label="Red conceptual. Objetivos del negocio motivan requerimientos del sistema. Las propiedades de arquitectura deben ser un superconjunto de los requerimientos y se priorizan a través del tradeoff. Las tácticas promueven o inhiben propiedades de arquitectura y determinan relaciones, responsabilidades y roles de los elementos. Los elementos forman estructuras, cuyo conjunto es la arquitectura, que se representa a través de vistas.">
+      <defs>
+        <marker id="performance-flecha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--linea)"/>
+        </marker>
+      </defs>
+      <rect x="10" y="14" width="150" height="40" rx="18" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="85" y="39" text-anchor="middle" fill="currentColor" font-size="13">Objetivos del negocio</text>
+      <rect x="10" y="130" width="150" height="40" rx="18" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="85" y="147" text-anchor="middle" fill="currentColor" font-size="13">Requerimientos</text>
+      <text x="85" y="163" text-anchor="middle" fill="currentColor" font-size="11">RF, RQA, restricciones</text>
+      <rect x="185" y="130" width="150" height="40" rx="18" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="260" y="147" text-anchor="middle" fill="currentColor" font-size="13">Propiedades de</text>
+      <text x="260" y="163" text-anchor="middle" fill="currentColor" font-size="13">arquitectura (QA)</text>
+      <rect x="185" y="14" width="150" height="40" rx="18" fill="none" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="260" y="39" text-anchor="middle" fill="var(--acc2)" font-size="13">Tradeoff</text>
+      <rect x="360" y="130" width="150" height="40" rx="18" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="435" y="155" text-anchor="middle" fill="currentColor" font-size="13">Tácticas</text>
+      <rect x="360" y="250" width="150" height="40" rx="18" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="435" y="267" text-anchor="middle" fill="currentColor" font-size="13">Elementos</text>
+      <text x="435" y="283" text-anchor="middle" fill="currentColor" font-size="11">módulos, C&amp;C, datos</text>
+      <rect x="185" y="250" width="150" height="40" rx="18" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="260" y="267" text-anchor="middle" fill="currentColor" font-size="13">Estructuras</text>
+      <text x="260" y="283" text-anchor="middle" fill="currentColor" font-size="11">= la arquitectura</text>
+      <rect x="10" y="250" width="150" height="40" rx="18" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="85" y="275" text-anchor="middle" fill="currentColor" font-size="13">Vistas</text>
+
+      <path d="M 85 54 L 85 128" fill="none" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#performance-flecha)"/>
+      <text x="92" y="95" fill="currentColor" font-size="11">motivan</text>
+      <path d="M 185 150 L 162 150" fill="none" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#performance-flecha)"/>
+      <text x="173" y="122" text-anchor="middle" fill="currentColor" font-size="10">superconjunto</text>
+      <path d="M 260 130 L 260 56" fill="none" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#performance-flecha)"/>
+      <text x="266" y="95" fill="var(--acc2)" font-size="11">se priorizan a través de</text>
+      <path d="M 360 150 L 337 150" fill="none" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#performance-flecha)"/>
+      <text x="348" y="122" text-anchor="middle" fill="currentColor" font-size="10">promueven</text>
+      <text x="348" y="112" text-anchor="middle" fill="currentColor" font-size="10">o inhiben</text>
+      <path d="M 435 170 L 435 248" fill="none" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#performance-flecha)"/>
+      <text x="441" y="205" fill="currentColor" font-size="11">determinan</text>
+      <text x="441" y="219" fill="currentColor" font-size="11">relaciones y roles</text>
+      <path d="M 360 270 L 337 270" fill="none" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#performance-flecha)"/>
+      <path d="M 185 270 L 162 270" fill="none" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#performance-flecha)"/>
+      <text x="173" y="310" text-anchor="middle" fill="currentColor" font-size="10">se representan con</text>
+    </svg>
+    <figcaption>El camino crítico de la red conceptual: del objetivo de negocio a las vistas. Estilos y principios de arquitectura también forman parte de la red completa, pero se ven más adelante.</figcaption>
+  </figure>
+
+  <ul>
+    <li><b>Los objetivos del negocio motivan requerimientos</b> sobre uno o varios sistemas.</li>
+    <li><b>Las propiedades de arquitectura</b> (funcionales y de atributos de calidad) <b>deben ser un superconjunto de los requerimientos</b>: lo que la arquitectura exhibe tiene que cubrir, como mínimo, todos los requerimientos explícitos. Puede dar más, pero eso es un extra. En la práctica, en la materia "propiedades de arquitectura" se lee como atributos de calidad, porque las funciones dependen de cada sistema.</li>
+    <li><b>Los atributos de calidad se priorizan a través del trade-off</b>, la actividad central del diseño.</li>
+    <li><b>Las tácticas promueven o inhiben atributos</b>, y el arquitecto debe balancear su aplicación.</li>
+    <li><b>Las tácticas determinan las relaciones, responsabilidades y roles de los elementos</b>: módulos (capa de UI, de lógica de negocio, de acceso a datos) y elementos dinámicos (browsers, web servers, bases de datos, protocolos y formatos de datos como HTML, JSON o XML).</li>
+    <li><b>Los elementos forman estructuras</b> (de módulos, de componentes y conectores, de allocation), y el conjunto de estructuras es la arquitectura, que <b>se representa a través de vistas</b>.</li>
+  </ul>
+  <div class="idea"><b>Leído al revés.</b> La arquitectura es el conjunto de estructuras formadas por elementos sobre los que actúan tácticas, que se eligen en función de los atributos de calidad a potenciar según los requerimientos, que existen porque hay un objetivo de negocio. No se habla de estructuras, tácticas y atributos por capricho: tienen un vínculo directo con que un negocio logre sus objetivos.</div>
+
+  <h3 id="performance-ejemplo-inscripciones">Ejemplo resuelto: inscripciones online</h3>
+  <p>Sobre el objetivo "100% de los trámites online", los requerimientos de atributos de calidad del sistema de inscripción se amplían a cuatro, y en clase se discutió a qué atributo apunta cada uno:</p>
+  <table>
+    <thead><tr><th>Requerimiento</th><th>Atributo</th><th>Discusión</th></tr></thead>
+    <tbody>
+      <tr><td>RQA1. Responder en menos de 2 s</td><td>Performance</td><td>Directo: tiempo de respuesta.</td></tr>
+      <tr><td>RQA2. Permitir 500 inscripciones por minuto</td><td>Performance</td><td>Se propusieron disponibilidad y extensibilidad. Una única medida de throughput (transacciones por unidad de tiempo) casi siempre es un objetivo de performance. Se asume que el sistema está disponible mientras lo ofrece: si con 500 pedidos por minuto se cae, falla la performance y también la disponibilidad. Extensibilidad no aplica: no habla de agregar funcionalidad.</td></tr>
+      <tr><td>RQA3. Disponible días hábiles de 8 a 20 h</td><td>Disponibilidad</td><td>Explicita un rango horario en el que el sistema no debe caerse; fuera de él no dice nada.</td></tr>
+      <tr><td>RQA4. Facilitar la inscripción desde nuevas apps cliente en el futuro</td><td>Modificabilidad (extensibilidad), y escalabilidad</td><td>"Apps cliente" son aplicaciones (web, celular, tablet), no usuarios. Más canales de acceso pueden traer más demanda, y ahí juega la escalabilidad. Pero sobre todo obliga a modularizar y exponer el servicio de modo que se le puedan enchufar clientes nuevos: eso es modificabilidad.</td></tr>
+    </tbody>
+  </table>
+  <div class="warn"><b>Un requerimiento puede tocar más de un atributo.</b> Es la primera enseñanza del ejemplo. Y un requerimiento redactado muy corto admite varias interpretaciones; lo importante es poder justificar la asociación.</div>
+  <div class="ej"><b>Por qué RQA4 es modificabilidad.</b> Hace décadas, la inscripción en la facultad se hacía presencialmente, en cinco o seis computadoras con un sistema instalado en una red cerrada. ¿Cómo se hace para que una app de celular consuma ese servicio? Es posible, pero obliga a repensar la modularización. La respuesta hoy casi natural es el modelo cliente servidor, con el servidor exponiendo sus servicios mediante un protocolo de fácil acceso como HTTP, para enchufarle distintos clientes.</div>
+  <p>Las tácticas elegidas para el ejemplo (ilustrativas, no obligatorias) y a qué apuntan:</p>
+  <ul>
+    <li><b>Permitir concurrencia:</b> performance.</li>
+    <li><b>Múltiples web servers:</b> disponibilidad, y también performance percibida bajo carga, porque los requests se reparten.</li>
+    <li><b>Redundancia activa de web servers:</b> disponibilidad.</li>
+    <li><b>Encapsular la funcionalidad de inscripción en una API</b> y <b>modularizar con layers:</b> modificabilidad (RQA4).</li>
+  </ul>
+  <p>Esas tácticas se materializan en elementos: una estructura de módulos con capas de UI (web, línea de comandos), lógica de negocio y acceso a datos, y una estructura de componentes y conectores con browsers, varios web servers detrás de una API, la base de datos y los protocolos que los conectan. Cada estructura se documenta con su vista.</p>
+
+  <h3 id="performance-objetivos-vs-requerimientos">Objetivos de negocio no son requerimientos</h3>
+  <div class="examen">Dicho en clase, para que no se confunda en los exámenes: los objetivos de negocio de una organización no son lo mismo que los requerimientos sobre un sistema puntual.</div>
+  <table>
+    <thead><tr><th>Objetivo de negocio</th><th>Atributos sobre los que podría haber requerimientos</th></tr></thead>
+    <tbody>
+      <tr><td>Ganar más porción del mercado</td><td>Modificabilidad, usabilidad</td></tr>
+      <tr><td>Mantener una reputación alta</td><td>Disponibilidad, usabilidad, performance</td></tr>
+      <tr><td>Agregar nuevas funciones fácilmente</td><td>Modificabilidad, disponibilidad</td></tr>
+      <tr><td>Proveer un framework amigable para programadores (un SDK, librerías)</td><td>Modificabilidad</td></tr>
+      <tr><td>Integrarse con otros sistemas fácilmente</td><td>Interoperabilidad, portabilidad, modificabilidad</td></tr>
+      <tr><td>Superar a la competencia en velocidad de procesamiento</td><td>Performance, escalabilidad</td></tr>
+    </tbody>
+  </table>
+  <p>El objetivo es la meta; los requerimientos son lo medible que se deriva de ella. Para "superar a la competencia en velocidad", hay que averiguar qué throughput o response time tiene la competencia y traducirlo a requerimientos verificables: "100 transacciones por minuto más que la competencia", "procesar cada request un 10% más rápido". Para "mantener una reputación alta", en clase surgieron disponibilidad, confiabilidad, usabilidad, seguridad y performance: todo lo que se ve desde afuera.</p>
+
+  <h3 id="performance-ejercicio-3">Guía, ejercicio 3: verdadero o falso</h3>
+  <p>Indicar si las afirmaciones son correctas o incorrectas, justificando.</p>
+  <div class="examen">Dicho en clase: los ejercicios de la guía son del mismo estilo que los del parcial.</div>
+  <ol type="a">
+    <li><b>"Si dos sistemas implementan exactamente las mismas funcionalidades, entonces su arquitectura es equivalente."</b> Falso. Funcionalidad, en la materia, son las funciones de negocio (inscribirse, agregar un curso). Dos sistemas con las mismas funciones pueden tener arquitecturas y atributos de calidad totalmente distintos.</li>
+    <li><b>"Una arquitectura pobre puede hacer inviable cumplir atributos de calidad aunque las funcionalidades estén bien definidas."</b> Verdadero. (La consigna original decía "requerimientos no funcionales"; la cátedra prefiere "atributos de calidad".)</li>
+    <li><b>"La documentación arquitectónica reemplaza a la arquitectura."</b> Falso: la documentación la complementa como mucho. La arquitectura existe aunque no esté documentada.</li>
+    <li><b>"Una vista de componentes y conectores permite razonar mejor sobre performance y disponibilidad que una vista puramente modular."</b> Verdadero: la de C&amp;C muestra procesos e interacciones en runtime, que es donde se juegan esos atributos. (Originalmente decía "vista de deployment"; se cambió en clase porque la que se vio en la materia es la de componentes y conectores. Para la cátedra, cualquier cosa que documente una estructura es una vista.)</li>
+    <li><b>"Cuanto más detallado es un diagrama, más arquitectónico es."</b> Falso. A veces más es menos: el diagrama tiene que tener lo justo y necesario para lo que se quiere analizar; si se quiere ver otro problema, se arma otro diagrama. Además una vista sirve para comunicar: llena de detalles puede ser útil para quien ya conoce el sistema, pero otro no la entiende en poco tiempo.</li>
+  </ol>
+  <p class="ref">Disponibilidad, escalabilidad y los conceptos de SLA y trade-off se introducen en el capítulo anterior; estilos y principios de arquitectura, que completan la red conceptual, se ven más adelante.</p>
+</section>

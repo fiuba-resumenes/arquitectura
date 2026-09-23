@@ -1,0 +1,285 @@
+<section class="unidad" id="metricas" data-titulo="Métricas y ejercicios">
+  <h2>4. Métricas del TP1 y ejercicios de escalabilidad</h2>
+  <p class="intro">Para hablar de performance o escalabilidad con fundamento hay que medir, y para medir hace falta un stack: algo que genere carga, algo que recolecte métricas, una base donde guardarlas y algo que las muestre. La primera parte recorre ese stack (StatsD, Graphite, cAdvisor, Grafana, Artillery), cómo leer percentiles y qué errores de medición son los más comunes. La segunda resuelve ejercicios de la guía sobre clasificación de requerimientos, picos de demanda, load balancers y cómo sacar conclusiones de performance y escalabilidad a partir de mediciones, donde la respuesta casi siempre empieza con "depende".</p>
+
+  <h3 id="metricas-stack">El stack de medición</h3>
+  <p>El servicio a analizar es uno solo (la API); todo lo demás son herramientas que lo rodean para poder observarlo. Cada pieza cumple un rol distinto y conviene no mezclarlas:</p>
+  <ul>
+    <li><b>Generador de carga</b> (Artillery): le pega a la API siguiendo un escenario y reporta qué mandó y qué recibió.</li>
+    <li><b>Protocolo de métricas</b> (StatsD): el formato en que las herramientas envían sus números.</li>
+    <li><b>Base de series temporales</b> (Graphite): guarda esos números a lo largo del tiempo.</li>
+    <li><b>Recolector de recursos</b> (cAdvisor): extrae CPU, memoria y red de cada contenedor.</li>
+    <li><b>Visualización</b> (Grafana): arma dashboards consultando la base.</li>
+  </ul>
+
+  <figure class="diag">
+    <svg viewBox="0 0 560 240" role="img" aria-label="Flujo del stack de medición: Artillery envía requests HTTP a la API y manda sus métricas por StatsD a Graphite; cAdvisor observa los contenedores y envía CPU, memoria y red a Graphite; Grafana consulta Graphite para dibujar los dashboards">
+      <defs>
+        <marker id="metricas-flecha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--linea)"/>
+        </marker>
+      </defs>
+      <rect x="20" y="20" width="140" height="44" rx="8" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="90" y="47" text-anchor="middle" fill="currentColor" font-size="14">Artillery</text>
+      <rect x="20" y="170" width="140" height="44" rx="8" fill="none" stroke="var(--acc4)" stroke-width="2"/>
+      <text x="90" y="190" text-anchor="middle" fill="currentColor" font-size="14">API</text>
+      <text x="90" y="206" text-anchor="middle" fill="currentColor" opacity="0.7" font-size="11">servicio bajo prueba</text>
+      <rect x="210" y="170" width="140" height="44" rx="8" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="280" y="197" text-anchor="middle" fill="currentColor" font-size="14">cAdvisor</text>
+      <rect x="400" y="20" width="140" height="54" rx="8" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="470" y="43" text-anchor="middle" fill="currentColor" font-size="14">Graphite</text>
+      <text x="470" y="61" text-anchor="middle" fill="currentColor" opacity="0.7" font-size="11">recibe StatsD por UDP</text>
+      <rect x="400" y="170" width="140" height="44" rx="8" fill="none" stroke="var(--acc)" stroke-width="2"/>
+      <text x="470" y="197" text-anchor="middle" fill="currentColor" font-size="14">Grafana</text>
+      <line x1="90" y1="64" x2="90" y2="166" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#metricas-flecha)"/>
+      <text x="98" y="120" fill="currentColor" font-size="11">requests HTTP</text>
+      <line x1="160" y1="42" x2="396" y2="42" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#metricas-flecha)"/>
+      <text x="278" y="34" text-anchor="middle" fill="currentColor" font-size="11">métricas de la prueba</text>
+      <line x1="320" y1="170" x2="438" y2="78" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#metricas-flecha)"/>
+      <text x="300" y="120" fill="currentColor" font-size="11">CPU, memoria, red</text>
+      <line x1="208" y1="192" x2="164" y2="192" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="186" y="184" text-anchor="middle" fill="var(--acc2)" font-size="11">observa</text>
+      <line x1="470" y1="74" x2="470" y2="166" stroke="var(--linea)" stroke-width="1.5" marker-end="url(#metricas-flecha)"/>
+      <text x="478" y="124" fill="currentColor" font-size="11">consulta</text>
+    </svg>
+    <figcaption>Quién manda qué a quién. La API no sabe que la están midiendo: la carga llega por HTTP y los recursos los observa cAdvisor desde afuera.</figcaption>
+  </figure>
+
+  <h3 id="metricas-statsd">StatsD: métricas sobre UDP</h3>
+  <p>La métrica más simple es un contador: cada vez que llega un request, se incrementa. Para mandar ese tipo de datos se desarrolló StatsD, un protocolo hipersencillo que corre sobre UDP: cada métrica es un string chiquito con el nombre, el valor y el tipo. Nació para un proyecto en particular y se extendió hasta quedar como estándar de facto.</p>
+  <ul>
+    <li>Datadog tomó StatsD, le agregó features y lo llamó DogStatsD, pero sigue aceptando el original sin extensiones.</li>
+    <li>Los nombres de métrica son jerárquicos, separados por puntos como una URL (<code>stats.gauges.cadvisor.&lt;contenedor&gt;.cpu...</code>): cada punto es un nivel del árbol y las hojas son las métricas.</li>
+    <li>Tipos habituales: contadores y <i>gauges</i>. Un gauge es como el velocímetro del auto: un valor instantáneo que sube y baja.</li>
+  </ul>
+  <div class="idea"><b>OpenTelemetry.</b> Las herramientas de observabilidad fueron creciendo por agregado: Datadog empezó solo con métricas y después sumó logs, para poder correlacionar en el tiempo cuánto tardó la base, cuánto el application server y qué dice el log. OpenTelemetry es la iniciativa de parar con las soluciones de cada empresa y armar un estándar abarcativo de todo eso (métricas y logs), una capa por encima de lo que resuelve StatsD.</div>
+
+  <h3 id="metricas-graphite">Graphite: series temporales, resolución y retención</h3>
+  <p>Las métricas hay que guardarlas en algo optimizado para eso: las <b>bases de datos de series numéricas temporales</b> (<i>numeric time series</i>), que se especializan en almacenar valores numéricos según evolucionan en el tiempo. Graphite es una de ellas. Puede recibir datos por varios protocolos; en el TP está configurada para escuchar StatsD en el puerto 8125.</p>
+
+  <h4 id="metricas-retencion">Resolución y retención</h4>
+  <p>El primer instinto es guardar todo con la máxima resolución, por si después hace falta. Resolución es la granularidad: ¿interesa el total de visitas del día o las visitas por minuto? Guardar todo por siempre es pan para hoy y hambre para mañana: en algún momento salta la alarma de uso de storage.</p>
+  <div class="def"><b>Retención.</b> Configuración que dice con qué resolución y durante cuánto tiempo se guarda cada serie. Por ejemplo <code>retentions = 10s:6h</code> significa un punto cada 10 segundos, conservado durante 6 horas.</div>
+  <div class="warn"><b>Las métricas se borran solas.</b> Con una retención de 6 horas, si se corre una prueba a la una de la mañana y se la quiere analizar a las diez del día siguiente, los datos ya no están. Es limpieza configurable de la base, no un bug.</div>
+  <p>Lo que más se hace no es borrar sino <b>perder resolución progresivamente</b>: mucha resolución para el pasado reciente (lo que se puede accionar en lo inmediato) y, para lo que tiene más de cierta antigüedad, agregar. Cómo agregar depende de la métrica:</p>
+  <ul>
+    <li>Métricas <b>aditivas</b> (cantidad de visitas): la suma del día.</li>
+    <li>Métricas <b>promediables</b>: el promedio de la franja.</li>
+    <li>Métricas donde importa el extremo (uso de CPU): quedarse con el pico, el máximo o el mínimo.</li>
+  </ul>
+  <p>No hay receta: depende de la aplicación, el contexto y qué información se necesita. Hay que analizar la situación.</p>
+
+  <h4 id="metricas-funciones">Transformar las series</h4>
+  <p>Como son números, se les pueden aplicar operaciones matemáticas. cAdvisor reporta el uso <i>acumulado</i> de CPU, que por sí solo no dice mucho; lo que interesa es el uso a lo largo del tiempo, y eso es la <b>derivada</b> de la serie. Graphite trae funciones para eso y para otras transformaciones (por ejemplo, descartar valores por debajo de un umbral).</p>
+  <div class="warn"><b>Los gauges quedan con el último valor.</b> Si una prueba termina con un gauge alto y la siguiente arranca mucho después, el gráfico dibuja una línea entre ambos puntos como si hubiera habido datos en el medio. Conviene bajar la métrica al piso al terminar cada corrida (o agregar una fase quieta al comienzo) para que una corrida no parezca continuación de la anterior. Y en general: en un gráfico de líneas solo hay datos en los puntos; lo del medio es interpolación.</div>
+
+  <h3 id="metricas-cadvisor-grafana">cAdvisor y Grafana: leer los gráficos sin engañarse</h3>
+  <p><b>cAdvisor</b> es una herramienta de Google que extrae métricas de contenedores: CPU, memoria y throughput de red por contenedor. Su propia interfaz muestra solo los últimos minutos; configurado con un <i>storage driver</i> StatsD, vuelca todo en Graphite y no se pierde nada. <b>Grafana</b> es una herramienta gratuita para visualizar métricas desde muchos orígenes de datos posibles: se configura el origen (acá, Graphite) y se arman dashboards con gráficos de línea, barras, heatmaps o indicadores numéricos sueltos. Los paneles pueden usar variables (por ejemplo, el nombre del contenedor) que arman el nombre de la métrica en el momento.</p>
+  <p>La mayor parte de los errores al presentar mediciones no son técnicos sino de lectura:</p>
+  <ul>
+    <li><b>Conocer la unidad.</b> Graphite guarda el número que le dicen; si cAdvisor manda "200 millones", hay que averiguar de qué. El uso de CPU de cAdvisor está atado a cores, no a porcentaje.</li>
+    <li><b>Porcentaje de qué.</b> "0,8% de la RAM" es de la RAM de la máquina donde corrió, que es distinta en cada integrante del grupo. Si se limitan los recursos del contenedor (por ejemplo 4 cores de 8), el porcentaje pasa a ser sobre ese límite.</li>
+    <li><b>Mirar los ejes.</b> La herramienta autoescala: el mismo dibujo puede ser 1,5% o 1500%. Hubo grupos que reportaron un impacto altísimo que en realidad era despreciable por no mirar el eje vertical.</li>
+    <li><b>Escalas separadas.</b> Poner CPU y memoria en el mismo gráfico con órdenes de magnitud distintos manda una serie al piso: parece cero y no lo es.</li>
+    <li><b>No recortar los ejes.</b> Al hacer zoom o capturar una zona, sin ejes el gráfico no es nada.</li>
+  </ul>
+  <div class="ej"><b>Limitar los contenedores.</b> Sin límites de CPU y memoria, cada contenedor usa todo lo que pueda, y las corridas en máquinas distintas no son comparables. Definir límites hace que "10%" signifique lo mismo sin importar quién corre la prueba, y es una decisión que se puede justificar y documentar.</div>
+  <p class="nota">Usabilidad no es el atributo clave de una base de métricas: ahí importa que no se pierdan datos (disponibilidad, confiabilidad). Por eso la interfaz propia de Graphite es austera y la visualización se delega a otra herramienta.</p>
+
+  <h3 id="metricas-profiling">Profiling y generadores de carga</h3>
+  <div class="def"><b>Profiling.</b> Medir en ejecución qué partes del código se ejecutan más seguido y cuáles tardan más. Hay variantes con y sin instrumentación; en abstracto, es como si cada función registrara en memoria cuándo entró y cuándo salió el flujo, y al final se obtuviera cuántas veces se llamó cada una y cuánto tardó.</div>
+  <p>El valor está en no perder tiempo mejorando lo que no sirve mejorar. Una función que tarda poco pero se llama un millón de veces puede justificar un recorte chico con gran ganancia; otra que tarda cinco segundos pero se llama una vez tal vez no. La pregunta que casi nunca se contesta de manera consistente al optimizar es: ¿por qué tocar esto, porque puedo o porque tiene un impacto mensurable? A veces el profiler revela que la aplicación estaba bien y se la pasaba esperando a la base de datos; el consumo de memoria es otro hallazgo clásico.</p>
+  <p>Las ejecuciones que se miden tienen que estar pensadas de antemano: saber qué carga y qué escenario se aplica para poder decir "bajo esta carga, se comporta así". Para eso está el <b>generador de carga</b>: se le describen escenarios en un archivo de configuración (pegale a este endpoint, después a este otro diez veces) y los ejecuta. Un escenario realista simula un flujo completo, como una compra en un marketplace: iniciar sesión, buscar, recorrer resultados, armar el carrito, comprar. Las herramientas avanzadas modelan el comportamiento con distribuciones, picos y el <i>think time</i> del usuario (no todos hacen clic a la misma velocidad).</p>
+  <table>
+    <thead><tr><th>Herramienta</th><th>Características</th></tr></thead>
+    <tbody>
+      <tr><td>JMeter (Apache)</td><td>Uso profesional. Permite distribuir la carga desde varias máquinas y armar árboles de comportamiento. Cubre muchos más escenarios, con una curva de aprendizaje empinada.</td></tr>
+      <tr><td>Artillery</td><td>Más simple, configurado en YAML. Alcanza para el TP; incorporó en su momento las rampas descendentes que antes no tenía.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="metricas-artillery">Demo: Artillery contra <code>/rates</code></h3>
+  <p>Un archivo de Artillery tiene dos partes: <b>configuración</b> y <b>escenarios</b>. En la configuración van los entornos (con el <i>target</i>, la URL base del servicio), los plugins (el de StatsD, apuntando al puerto 8125 y con un prefijo para distinguir estas métricas de otras) y las <b>fases</b>. Artillery crea usuarios virtuales que ejecutan el escenario y se reutilizan.</p>
+  <pre><code>phases:
+  - name: Ramp
+    duration: 30
+    arrivalRate: 1
+    rampTo: 5
+  - name: Plain
+    duration: 60
+    arrivalRate: 5</code></pre>
+  <p>Una rampa de 30 segundos que sube de 1 a 5 requests por segundo y una meseta de 60 segundos a 5 requests por segundo. El escenario le pega a <code>/rates</code>, que devuelve las cotizaciones vigentes de pesos a dólares, euros y reales.</p>
+  <ul>
+    <li>Durante la corrida Artillery muestra la fase y resultados parciales; al final, el resumen: 390 requests enviados, todos con código 200, tiempo de respuesta mínimo 0 (tema de resolución), máximo 16 ms, promedio, mediana, p95 de 1 ms y p99 de 2 ms (corriendo local). Ese resumen trae más información que la que se dibuja en el dashboard: vale como evidencia.</li>
+    <li>En Grafana, el primer gráfico muestra la rampa y la meseta. Pero en la meseta dice "50", no 5: Graphite agrupa de a 10 segundos, y 5 requests por segundo durante 10 segundos son 50 por punto.</li>
+    <li>Los gráficos están sincronizados en el tiempo: se puede correlacionar la carga con el uso de recursos y con los tiempos de respuesta.</li>
+  </ul>
+  <div class="warn"><b>Minuto y medio es una prueba hipercorta.</b> Con puntos cada 10 segundos son 9 mediciones: muy poco para ver una tendencia. Las pruebas de verdad tienen que durar varios minutos, porque hay cosas que solo pasan a partir de determinado momento.</div>
+
+  <h3 id="metricas-percentiles">Promedio, mediana y percentiles</h3>
+  <p>El promedio es la suma dividida la cantidad; la mediana es el valor que deja la mitad arriba y la mitad abajo. La diferencia importa: la mediana <b>pertenece a la muestra</b>. Si el precio promedio de las casas de un barrio es 102 mil dólares, puede no haber ninguna casa que valga eso; la mediana es el precio de una casa real de esa población. Por eso en performance se usa más la mediana que el promedio.</p>
+  <div class="def"><b>Percentil N (pN).</b> El valor que deja al N% de las mediciones por debajo. La mediana es el p50. "p95 = 200 ms" significa que el 95% de los requests se resolvió en 200 ms o menos.</div>
+  <p>Más usados que el p50 son el p95 y el p99, porque describen la cola: lo que experimentan los usuarios con peor suerte. Que el p95 y el p99 estén cerca (aunque uno sea el doble del otro, 1 ms contra 2 ms) indica un endpoint con comportamiento parejo. Del mismo modo, un máximo bastante mayor que la mediana no alarma si la diferencia absoluta es de 20 ms.</p>
+
+  <h3 id="metricas-buenas-practicas">Buenas prácticas de medición</h3>
+  <ul>
+    <li><b>Calentar antes de medir.</b> Hacer un par de corridas previas para precalentar buffers y memoria. Salvo que se quiera estudiar el arranque, lo habitual es medir <i>en régimen</i>: con la aplicación ya levantada y habiendo procesado transacciones, sin reservas de estructuras por primera vez que meten variabilidad rara al comienzo.</li>
+    <li><b>Pruebas largas</b> y con escenarios diseñados de antemano.</li>
+    <li><b>Bajar los gauges al piso</b> entre corridas.</li>
+    <li><b>Unidades, rangos y ejes</b> siempre explícitos (ver <a href="#metricas-cadvisor-grafana">cómo leer los gráficos</a>).</li>
+    <li><b>Predecir antes de medir.</b> Antes de aplicar una táctica, anticipar cuánto debería mejorar y por qué; después comparar con lo medido. Cuando la predicción falla es cuando más se aprende.</li>
+  </ul>
+  <div class="idea"><b>Evidencia y análisis.</b> Cualquier afirmación sobre el sistema ("acá hay una condición de carrera", "esta dependencia es lenta") vale lo que vale su evidencia: mostrarla. Y distinguir qué es una simplificación deliberada del sistema bajo estudio (por ejemplo, un servicio externo simulado) de un problema real.</div>
+
+  <h3 id="metricas-ej4">Ejercicio 4: clasificar la minuta</h3>
+  <p>Una universidad reúne al equipo que desarrollará su sistema de inscripción. Hay que clasificar cada frase de la minuta como objetivo de negocio, requerimiento funcional, requerimiento sobre un atributo de calidad, restricción o táctica.</p>
+  <table>
+    <thead><tr><th>Frase</th><th>Clasificación</th></tr></thead>
+    <tbody>
+      <tr><td>F1. Reducir un 60% las consultas presenciales sobre inscripciones durante el próximo cuatrimestre.</td><td>Objetivo de negocio.</td></tr>
+      <tr><td>F2. El estudiante debe poder consultar sus inscripciones y cancelar una inscripción.</td><td>Requerimiento funcional.</td></tr>
+      <tr><td>F3. Durante la apertura de inscripciones, con 300 usuarios simultáneos, el 95% de las consultas debe responder en menos de 2 segundos.</td><td>Requerimiento sobre un atributo de calidad (performance).</td></tr>
+      <tr><td>F4. Por disposición institucional, los datos deben almacenarse en servidores de la universidad.</td><td>Restricción: una decisión de diseño ya tomada que no se puede cambiar.</td></tr>
+      <tr><td>F5. Para reducir el impacto de la caída de un servidor, el equipo propone ejecutar varias instancias de la aplicación.</td><td>Táctica: redundancia, para disponibilidad.</td></tr>
+      <tr><td>F6. El sistema tiene que ser fácil de escalar.</td><td>Expresión de deseo sobre escalabilidad, sin requerimiento concreto.</td></tr>
+      <tr><td>F7. La interfaz web y la aplicación administrativa usarán una misma API de inscripción.</td><td>Táctica, para modificabilidad o extensibilidad.</td></tr>
+    </tbody>
+  </table>
+  <div class="warn"><b>Redundancia no es escalabilidad horizontal.</b> F5 invita a responder "escalabilidad", pero el límite es fino y la distinción es útil. Tener varias instancias de lo mismo conviviendo y prestando servicio a la vez es <b>redundancia</b>, una táctica de disponibilidad (reduce el impacto de que se caiga un servidor). <b>Escalabilidad</b> es un atributo de calidad, y la escalabilidad horizontal es una táctica para favorecerlo: poder agregar nuevas instancias. La frase dice explícitamente para qué se proponen las instancias: disponibilidad.</div>
+  <p>F6 no es una táctica ni una decisión de diseño: expresa que se quiere alta escalabilidad. "Fácil de escalar" significa que el costo de agregar recursos y que el sistema los incorpore (para dar mejor performance o disponibilidad) es relativamente bajo, pero así escrito no es verificable. El ejercicio pide además reformularla para que se pueda verificar, y relacionar F1 con un requerimiento funcional y uno de calidad que contribuyan a alcanzarlo.</p>
+
+  <h3 id="metricas-ej5">Ejercicio 5: inscripciones sin interrupciones en picos</h3>
+  <p>La universidad quiere asegurar inscripciones online sin interrupciones durante picos de demanda. ¿Sobre qué atributos de calidad hay que poner requerimientos?</p>
+  <ul>
+    <li><b>Escalabilidad y elasticidad</b>, íntimamente relacionadas: "pico" significa que la carga llega a un máximo de forma súbita, y ante eso el sistema debe poder incorporar recursos para aguantar la demanda extra.</li>
+    <li><b>Disponibilidad</b>: "sin interrupciones". Si el pico mata un servidor, otro tiene que poder tomar su lugar o repartirse la carga.</li>
+  </ul>
+  <p class="nota">Ojo: elasticidad es un atributo de calidad, no una táctica.</p>
+
+  <h4 id="metricas-horizontal-vertical">Horizontal contra vertical</h4>
+  <table>
+    <thead><tr><th></th><th>Escalar horizontalmente</th><th>Escalar verticalmente</th></tr></thead>
+    <tbody>
+      <tr><td>Qué es</td><td>Agregar instancias: más máquinas, máquinas virtuales o nodos en un cluster.</td><td>Hacer crecer los servidores que ya existen: más CPU, memoria, disco.</td></tr>
+      <tr><td>Límite</td><td>También tiene, pero se alcanza más tarde.</td><td>Se alcanza generalmente más rápido: a una misma máquina física se le complica seguir agregando recursos.</td></tr>
+      <tr><td>Costo</td><td>Muchos nodos baratos.</td><td>Mejorar un nodo se vuelve cada vez más caro.</td></tr>
+    </tbody>
+  </table>
+  <p>De ahí la noción, a tomar con muchas pinzas, de que a largo plazo escalar horizontalmente suele funcionar mejor que escalar solo verticalmente (<i>scale out, not up</i> figura entre las tácticas de escalabilidad).</p>
+  <div class="idea"><b>Nivel de detalle de una táctica.</b> En esta etapa una táctica se enuncia en una oración: "proveer redundancia", "que el servicio sea stateless". Algo como "medir el uso de CPU de cada servidor y, cuando el promedio llega al 70%, agregar una instancia" ya es una táctica completa. No hace falta bajar a cómo se configura cada servidor. Nombrar la tecnología (por ejemplo Kubernetes, que implementa esta escalabilidad replicando contenedores) no está prohibido: si la táctica introduce o reutiliza una tecnología, mejor hacerlo explícito.</div>
+  <div class="def"><b>ADR (registro de decisiones arquitecturales, por su sigla en inglés).</b> Práctica de documentar cada decisión arquitectural (cada táctica) en forma sencilla: el contexto, la decisión tomada y qué alternativas se consideraron y por qué se descartaron.</div>
+
+  <h3 id="metricas-load-balancer">El load balancer: a favor, en contra y contra qué</h3>
+  <p>Un load balancer es un elemento de hardware o software que distribuye el tráfico entrante entre múltiples servidores. ¿Qué atributos favorece y cuáles desfavorece?</p>
+  <ul>
+    <li><b>Disponibilidad</b> (a favor): detrás hay varios servidores que prestan el mismo servicio; si uno muere, otro toma los siguientes requests.</li>
+    <li><b>Desplegabilidad o mantenibilidad</b> (a favor): permite actualizar sin downtime. Con 10 servidores detrás, se levantan 10 nuevos con la nueva versión, se los registra en el cluster y se les deriva tráfico progresivamente. Otra estrategia es duplicar todo (load balancer y servidores) y hacer un switch violento cambiando el registro DNS.</li>
+    <li><b>Complejidad</b> (en contra): es un componente más para configurar, monitorear y mantener.</li>
+    <li><b>Seguridad y performance</b>: surgieron como contras (un componente más expuesto, un salto más de red), pero la respuesta es "depende".</li>
+  </ul>
+  <div class="examen"><b>La trampa: ¿contra qué se compara?</b> Decir que una táctica "mejora" o "empeora" un atributo no significa nada sin la alternativa. Dicho en clase como algo que hay que aclarar cada tanto: hay que explicitar contra qué escenario se está comparando.</div>
+  <p>Aplicado al load balancer:</p>
+  <ul>
+    <li><b>Seguridad.</b> Contra 10 servidores expuestos a internet cuyas direcciones tienen que conocer los clientes, un único punto de entrada reduce la superficie de ataque.</li>
+    <li><b>Performance, escenario 1.</b> 100 requests por minuto, un solo servidor que los atiende cómodo, con o sin load balancer adelante: el load balancer <i>empeora</i> la performance, aunque sea por milisegundos, porque agrega un salto de red.</li>
+    <li><b>Performance, escenario 2.</b> 1000 requests por minuto, un servidor solo que no da abasto (parte da timeout) contra un load balancer con dos servidores: el segundo responde mejor.</li>
+  </ul>
+  <div class="warn"><b>Performance o escalabilidad.</b> Estrictamente, lo que mejora al pasar de un servidor a un load balancer con un cluster es que permite <b>escalar horizontalmente</b> mucho más fácil: es más escalable. Mirándolo de arriba, sin saber cómo responden a la carga, no se puede decir cuál es más performante. La respuesta empieza con "depende": si la carga entra en un servidor, un servidor; si varía de forma impredecible y puede superarlo, el load balancer.</div>
+
+  <h4 id="metricas-spof">Punto único de falla</h4>
+  <div class="def"><b>Single point of failure (SPOF).</b> Componente del que hay una sola instancia y cuya caída tira el servicio.</div>
+  <p>Tener uno solo juega en contra de la disponibilidad, pero no está mal en general: hay sistemas donde una única instancia es barata y su caída afecta poco. Hay guías que recomiendan como mínimo tres instancias del mismo servicio, y muchos proveedores de cloud hacen eso con sus colas y balanceadores.</p>
+  <p>El load balancer mismo puede ser un SPOF. Una forma de hacerlo redundante es tener otro de repuesto y, si el activo cae, disparar una automatización que cambie el registro DNS a la IP del repuesto. Con load balancers contratados a terceros esto queda del lado del proveedor, que promete un <b>SLA</b> (Service Level Agreement) con una métrica de disponibilidad, por ejemplo 99,99% (cuatro nueves). Para cumplirlo el proveedor necesariamente tiene más de una instancia; cómo lo resuelve internamente no se ve desde afuera.</p>
+  <p class="ref">Tácticas de disponibilidad (redundancia, detección y recuperación de fallas): <a href="#metricas-tacticas">decks de tácticas</a>.</p>
+
+  <h3 id="metricas-ej11">Ejercicio 11: conclusiones a partir de mediciones</h3>
+  <p>Una universidad ABC contrata una evaluación de performance de su sistema web de inscripción. Con un software de load testing se obtiene:</p>
+  <table>
+    <thead><tr><th>Carga (inscripciones/s)</th><th>Resultado</th></tr></thead>
+    <tbody>
+      <tr><td>2</td><td>p95 = 200 ms</td></tr>
+      <tr><td>5</td><td>p95 = 200 ms</td></tr>
+      <tr><td>6</td><td>p95 = 300 ms</td></tr>
+      <tr><td>8</td><td>p95 = 1000 ms</td></tr>
+      <tr><td>10</td><td>Algunos requests responden en 5000 ms en promedio, pero a los 10 segundos empieza a rechazar con HTTP 503 (Service Unavailable).</td></tr>
+    </tbody>
+  </table>
+
+  <figure class="diag">
+    <svg viewBox="0 0 520 270" role="img" aria-label="Curva de p95 de ABC en función de la carga: 200 ms a 2 y 5 requests por segundo, 300 ms a 6, 1000 ms a 8 y errores 503 a 10. El punto de XYZ, 200 ms a 6 requests por segundo, queda por debajo de ABC en esa carga">
+      <line x1="60" y1="184" x2="480" y2="184" stroke="var(--grid)" stroke-width="1"/>
+      <line x1="60" y1="148" x2="480" y2="148" stroke="var(--grid)" stroke-width="1"/>
+      <line x1="60" y1="112" x2="480" y2="112" stroke="var(--grid)" stroke-width="1"/>
+      <line x1="60" y1="76" x2="480" y2="76" stroke="var(--grid)" stroke-width="1"/>
+      <line x1="60" y1="40" x2="480" y2="40" stroke="var(--grid)" stroke-width="1"/>
+      <line x1="60" y1="220" x2="480" y2="220" stroke="var(--linea)" stroke-width="1.5"/>
+      <line x1="60" y1="30" x2="60" y2="220" stroke="var(--linea)" stroke-width="1.5"/>
+      <text x="52" y="224" text-anchor="end" fill="currentColor" font-size="11">0</text>
+      <text x="52" y="188" text-anchor="end" fill="currentColor" font-size="11">200</text>
+      <text x="52" y="116" text-anchor="end" fill="currentColor" font-size="11">600</text>
+      <text x="52" y="44" text-anchor="end" fill="currentColor" font-size="11">1000</text>
+      <text x="16" y="130" fill="currentColor" font-size="11" transform="rotate(-90 16 130)" text-anchor="middle">p95 (ms)</text>
+      <text x="140" y="238" text-anchor="middle" fill="currentColor" font-size="11">2</text>
+      <text x="260" y="238" text-anchor="middle" fill="currentColor" font-size="11">5</text>
+      <text x="300" y="238" text-anchor="middle" fill="currentColor" font-size="11">6</text>
+      <text x="380" y="238" text-anchor="middle" fill="currentColor" font-size="11">8</text>
+      <text x="460" y="238" text-anchor="middle" fill="currentColor" font-size="11">10</text>
+      <text x="270" y="260" text-anchor="middle" fill="currentColor" font-size="11">carga (requests por segundo)</text>
+      <polyline points="140,184 260,184 300,166 380,40" fill="none" stroke="var(--acc3)" stroke-width="2"/>
+      <circle cx="140" cy="184" r="4" fill="var(--acc3)"/>
+      <circle cx="260" cy="184" r="4" fill="var(--acc3)"/>
+      <circle cx="300" cy="166" r="4" fill="var(--acc3)"/>
+      <circle cx="380" cy="40" r="4" fill="var(--acc3)"/>
+      <line x1="380" y1="40" x2="455" y2="40" stroke="var(--acc4)" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <text x="460" y="58" text-anchor="middle" fill="var(--acc4)" font-size="11">503</text>
+      <line x1="453" y1="33" x2="467" y2="47" stroke="var(--acc4)" stroke-width="2"/>
+      <line x1="467" y1="33" x2="453" y2="47" stroke="var(--acc4)" stroke-width="2"/>
+      <rect x="296" y="180" width="8" height="8" fill="var(--acc)"/>
+      <text x="312" y="200" fill="var(--acc)" font-size="11">XYZ: 200 ms a 6</text>
+      <text x="150" y="176" fill="var(--acc3)" font-size="11">ABC</text>
+      <path d="M 60 196 L 260 196" stroke="var(--acc2)" stroke-width="1.5" stroke-dasharray="5 4" fill="none"/>
+      <text x="70" y="210" fill="var(--acc2)" font-size="10">lo que se puede prometer</text>
+    </svg>
+    <figcaption>Sensibilidad a la carga de ABC. La línea punteada marca la promesa más segura (hasta 5 requests por segundo, p95 de 200 ms); después la curva se dispara y a 10 empieza a rechazar.</figcaption>
+  </figure>
+
+  <h4 id="metricas-ej11-response-time">¿Cuál es el response time de la inscripción?</h4>
+  <p>Proponer la mediana o el promedio de todos los valores es un error: <b>no existe un único response time</b>, varía con la carga. A carga baja (2 a 5 requests por segundo) el p95 es 200 ms; con más carga, crece.</p>
+  <div class="ej"><b>Pensarlo como un contrato.</b> Si se vende el sistema a universidades, ¿qué performance se puede prometer con estos datos? Una respuesta: "garantizamos p95 de 200 ms mientras la carga no supere 5 requests por segundo". Con 5,3 ya no se garantiza nada, y eso queda explícito. Otra: mostrar la curva completa. En la práctica los contratos suelen ser puntuales, estrictos y cortantes, del estilo "hasta N por segundo, el 95% no demora más de X". Los servicios que publican este tipo de métricas se ven más serios que los que no documentan nada, siempre que los números salgan de mediciones reales con los recursos de producción. Como cliente, conviene confiar más en quien da números, aunque no sean buenos: se sabe a qué atenerse.</div>
+
+  <h4 id="metricas-ej11-carga-maxima">¿Cuál es la carga máxima que soporta?</h4>
+  <p>Depende de qué se entienda por "máxima", y las dos respuestas que surgieron son correctas bajo su hipótesis:</p>
+  <ul>
+    <li>Si carga máxima es el punto donde el sistema empieza a fallar: 10 requests por segundo es el límite conocido a partir del cual aparecen 503. Con más pruebas (8,5, 9, 9,5) se podría afinar dónde aparece el primer error.</li>
+    <li>Si hay un requerimiento, por ejemplo p95 menor a 500 ms, a 8 ya no se cumple: con estos datos solo se puede asegurar hasta 6 (quizás 7 o 7,5, no se sabe). A 9 requests por segundo podría tardar 9 segundos cada uno pero volver todos: ¿eso es "soportarlo"?</li>
+  </ul>
+  <div class="idea"><b>El "depende" es la respuesta.</b> Un inciso de una guía no puede dar un contexto tan completo como para que haya una respuesta única. El valor del ejercicio está en explicitar hipótesis, requerimientos y contexto, no en llegar a un número.</div>
+
+  <h4 id="metricas-ej11-performante">¿XYZ es más performante que ABC?</h4>
+  <p>El sistema de otra universidad, XYZ, procesa 6 requests por segundo con p95 de 200 ms. ABC, a 6, tiene 300 ms. ¿Es XYZ más performante?</p>
+  <ul>
+    <li>Primero: ¿qué significa "más performante"? ¿Mejor response time, mejor throughput? Hay una ensalada de métricas posibles (p50, p90, p95, p99, máximo, mínimo, promedio). Además se está comparando un punto contra una curva, que no son conmensurables.</li>
+    <li>Para comparar hay que igualar condiciones: la misma funcionalidad, la misma operación (una inscripción, no diez a la vez), la misma carga, el mismo hardware, el mismo estado (recién levantados o en régimen) y la misma duración (5 requests por segundo durante dos segundos no es lo mismo que durante una hora).</li>
+    <li>Con todo eso fijado, y definiendo "más performante" como menor p95 a igual carga, sí: a 6 requests por segundo XYZ es más performante, aunque sea por una décima de milisegundo.</li>
+  </ul>
+  <div class="riesgo"><b>El punto que no se midió.</b> Elegir XYZ porque a 6 por segundo responde 100 ms más rápido puede salir caro si apenas se supera esa carga se degrada hasta volverse inusable, y uno se entera en producción. No es una suposición razonable ni descartable: no hay datos. La única defensa es prever, con la mayor certeza posible, a qué carga se va a someter el servicio: ¿como mucho 6? ¿ocasionalmente 8, 10 o 15? ¿importa si se cae por encima de eso? Un SLA puede ser el arma de defensa contractual, pero no evita el problema.</div>
+  <p>Para cualquier comparación de este tipo (dos productos, o la versión actual contra la próxima del mismo sistema), la respuesta en el curso es siempre la misma: métricas. Medir.</p>
+
+  <h4 id="metricas-ej11-escalable">¿XYZ es más escalable que ABC?</h4>
+  <p>Con estos datos, no se puede saber. Escalabilidad es la habilidad del sistema de incorporar recursos y que ese agregado sea efectivo. Una forma (no la única) de observarla desde afuera es a través de la performance:</p>
+  <div class="ej"><b>Un escenario inventado para poder comparar.</b> ABC está en 5 requests por segundo y pasa a 8; el p95 sube a 1000 ms. Se mantiene la carga en 8 durante una hora. Si a los 5 minutos el p95 empieza a bajar hasta volver a 200 ms, algo pasó adentro: el sistema agregó recursos (servidores, workers, memoria) y los aprovechó. Si XYZ, en igualdad de condiciones y sabiendo que también escaló, tarda 15 minutos en lograr lo mismo, se puede decir que la escalabilidad de ABC está mejor resuelta. También importa cuánto jugo le saca a los recursos: si ABC logra esa mejora agregando un servidor y XYZ necesita dos, ABC es más escalable.</div>
+  <p class="nota">Una recuperación así también podría deberse a que los recursos se "calentaron", pero sería sospechoso si el sistema venía horas en régimen a menor carga.</p>
+  <div class="warn"><b>Escalabilidad no es desplegabilidad.</b> Desplegabilidad (<i>deployability</i>, con varias definiciones en circulación) mide cuánto tarda un código en quedar instalado y con el proceso levantado en el ambiente productivo, no necesariamente integrado a la arquitectura y prestando servicio. A la escalabilidad le importa que el recurso agregado se incorpore, se empiece a usar, qué tan rápido y con qué resultado. La desplegabilidad es, a grandes rasgos, una partecita de ese proceso.</div>
+
+  <h3 id="metricas-tacticas">Catálogos de tácticas</h3>
+  <p>Los decks de tácticas de la cátedra agrupan, por atributo de calidad, tácticas orientadas a favorecerlo: el primero cubre performance, escalabilidad y disponibilidad; el segundo, modificabilidad, seguridad, testeabilidad, usabilidad e interoperabilidad. No hay una lista completa de tácticas: la bibliografía recolecta tácticas habituales (o las que le gustan al autor) y los decks son una selección para el curso. Se usan como caja de herramientas para los ejercicios: qué táctica aplicar, qué atributos afecta y bajo qué hipótesis.</p>
+  <p>Como ejemplo, las tácticas de escalabilidad (incorporar recursos adicionales de manera efectiva) que conectan con esta clase:</p>
+  <ul>
+    <li><b>Stateless:</b> guardar el estado en el cliente o en un cache distribuido separado de los servidores.</li>
+    <li><b>Scale out, not up</b> (ver <a href="#metricas-horizontal-vertical">horizontal contra vertical</a>).</li>
+    <li><b>Evitar supuestos o límites de recursos hardcodeados.</b></li>
+    <li><b>Diseñar para ser monitoreado:</b> detectar servicios caídos, logs, evaluar tiempos de respuesta del usuario final, autodiagnóstico.</li>
+    <li><b>Diseño asincrónico:</b> desacoplar componentes; un request puede quedar almacenado hasta que alguien pueda procesarlo.</li>
+    <li><b>Sharding</b> y <b>múltiples sitios activos</b> (esta última favorece también la disponibilidad).</li>
+  </ul>
+</section>
